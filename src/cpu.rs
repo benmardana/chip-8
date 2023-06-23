@@ -134,6 +134,50 @@ impl CPU {
             _ => OpCode::None,
         }
     }
+
+    pub fn update_screen(&mut self, screen: &mut [[u8; 64]; 32], x: usize, y: usize, n: u16) -> () {
+        let mut x_coord = self.get_register(x) % 64;
+        let mut y_coord = self.get_register(y) % 32;
+        let _ = self.set_register(0xF, 0);
+        for sprite_row in 0..n {
+            let sprite_index = (self.get_index() + sprite_row) as usize;
+
+            // get nth sprite counting from memory address in I
+            let sprite_byte = self.get_mem(sprite_index) as u8;
+
+            // For each of the 8 pixels/bits in this sprite row (from left to right, ie. from most to least significant bit):
+            for bit in 0..8 {
+                let sprite_pixel = sprite_byte & (0x80u8 >> bit);
+                let screen_pixel = &mut screen[y_coord as usize][x_coord as usize];
+
+                // If the current pixel in the sprite row is on and the pixel at coordinates X,Y on the screen is also on, turn off the pixel and set VF to 1
+                if sprite_pixel != 0 {
+                    if *screen_pixel == 1 {
+                        *screen_pixel = 0;
+                        let _ = self.set_register(0xF, 1);
+                    } else {
+                        // Or if the current pixel in the sprite row is on and the screen pixel is not, draw the pixel at the X and Y coordinates
+                        *screen_pixel = 1;
+                    }
+                }
+                // If you reach the right edge of the screen, stop drawing this row
+                if x_coord == 63 {
+                    break;
+                }
+                // Increment X (VX is not incremented)
+                x_coord += 1;
+                // END FOR
+            }
+            x_coord = self.get_register(x) % 64;
+
+            // Increment Y (VY is not incremented)
+            y_coord += 1;
+            // Stop if you reach the bottom edge of the screen
+            if y_coord == 31 {
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

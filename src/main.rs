@@ -26,10 +26,10 @@ fn main() {
     let mut renderer = Renderer::new(window).unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut chip_8 = CPU::new();
+    let mut cpu = CPU::new();
     let program = read("./src/ibm.ch8").unwrap();
     program.iter().enumerate().for_each(|(i, &x)| {
-        chip_8.set_mem(0x200 + i, x.into());
+        cpu.set_mem(0x200 + i, x.into());
     });
 
     'running: loop {
@@ -44,20 +44,20 @@ fn main() {
             }
         }
 
-        let instruction = chip_8.fetch();
-        let opcode = chip_8.decode(instruction);
+        let instruction = cpu.fetch();
+        let opcode = cpu.decode(instruction);
 
         match opcode {
             cpu::OpCode::ClearScreen => renderer.clear_screen(),
-            cpu::OpCode::Jump(n) => chip_8.set_pc(n),
-            cpu::OpCode::SetRegister(x, n) => chip_8.set_register(x, n).unwrap(),
-            cpu::OpCode::AddToRegister(x, n) => chip_8.add_to_register(x, n).unwrap(),
-            cpu::OpCode::Draw(x, y, n) => chip_8.update_screen(&mut renderer.screen, x, y, n),
-            cpu::OpCode::SetIndex(n) => chip_8.set_index(n),
+            cpu::OpCode::Jump(n) => cpu.set_pc(n),
+            cpu::OpCode::SetRegister(x, n) => cpu.set_register(x, n).unwrap(),
+            cpu::OpCode::AddToRegister(x, n) => cpu.add_to_register(x, n).unwrap(),
+            cpu::OpCode::Draw(x, y, n) => cpu.update_screen(x, y, n),
+            cpu::OpCode::SetIndex(n) => cpu.set_index(n),
             cpu::OpCode::None => (),
         };
 
-        renderer.draw_screen();
+        renderer.draw_screen(cpu.screen);
         renderer.present();
 
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 700));

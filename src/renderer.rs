@@ -36,11 +36,11 @@ impl Renderer {
         self.canvas.clear()
     }
 
-    pub fn draw_screen(&mut self) {
+    pub fn draw_screen(&mut self, screen: [[u8; 64]; 32]) {
         self.draw_background();
-        for row in 0..self.screen.len() {
-            for col in 0..self.screen[row].len() {
-                if self.screen[row][col] != 0 {
+        for row in 0..screen.len() {
+            for col in 0..screen[row].len() {
+                if screen[row][col] != 0 {
                     self.draw_pixel(col.try_into().unwrap(), row.try_into().unwrap());
                 }
             }

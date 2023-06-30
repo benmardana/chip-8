@@ -1,3 +1,5 @@
+use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum OpCode {
     ClearScreen,
@@ -18,6 +20,7 @@ pub struct CPU {
     registers: [u8; 16],
     delay_timer: u8,
     sound_timer: u8,
+    pub screen: [[u8; 64]; 32],
 }
 
 const FONT: [u16; 80] = [
@@ -49,6 +52,7 @@ impl Default for CPU {
             registers: [0u8; 16],
             delay_timer: u8::MAX,
             sound_timer: u8::MAX,
+            screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         };
         FONT.iter().enumerate().for_each(|(i, &x)| {
             cpu.memory[i] = x;
@@ -135,7 +139,7 @@ impl CPU {
         }
     }
 
-    pub fn update_screen(&mut self, screen: &mut [[u8; 64]; 32], x: usize, y: usize, n: u16) -> () {
+    pub fn update_screen(&mut self, x: usize, y: usize, n: u16) -> () {
         let mut x_coord = self.get_register(x) % 64;
         let mut y_coord = self.get_register(y) % 32;
         let _ = self.set_register(0xF, 0);
@@ -148,7 +152,7 @@ impl CPU {
             // For each of the 8 pixels/bits in this sprite row (from left to right, ie. from most to least significant bit):
             for bit in 0..8 {
                 let sprite_pixel = sprite_byte & (0x80u8 >> bit);
-                let screen_pixel = &mut screen[y_coord as usize][x_coord as usize];
+                let screen_pixel = &mut self.screen[y_coord as usize][x_coord as usize];
 
                 // If the current pixel in the sprite row is on and the pixel at coordinates X,Y on the screen is also on, turn off the pixel and set VF to 1
                 if sprite_pixel != 0 {

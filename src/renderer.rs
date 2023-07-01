@@ -1,7 +1,7 @@
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
-use sdl2::video::Window;
+use sdl2::{EventPump, Sdl};
 
 pub const GRID_X_SIZE: u32 = 64;
 pub const GRID_Y_SIZE: u32 = 32;
@@ -9,16 +9,34 @@ pub const DOT_SIZE_IN_PXS: u32 = 10;
 
 pub struct Renderer {
     canvas: WindowCanvas,
+    sdl_context: Sdl,
     pub screen: [[u8; 64]; 32],
 }
 
 impl Renderer {
-    pub fn new(window: Window) -> Result<Renderer, String> {
+    pub fn new() -> Result<Renderer, String> {
+        let sdl_context = sdl2::init().unwrap();
+        let video_subsystem = sdl_context.video().unwrap();
+        let window = video_subsystem
+            .window(
+                "chip-8",
+                GRID_X_SIZE * DOT_SIZE_IN_PXS,
+                GRID_Y_SIZE * DOT_SIZE_IN_PXS,
+            )
+            .position_centered()
+            .opengl()
+            .build()
+            .expect("unable to create window");
         let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
         Ok(Renderer {
             canvas,
+            sdl_context,
             screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         })
+    }
+
+    pub fn event_pump(&self) -> EventPump {
+        self.sdl_context.event_pump().unwrap()
     }
 
     fn draw_pixel(&mut self, x: u32, y: u32) {
@@ -45,17 +63,6 @@ impl Renderer {
                 }
             }
         }
-    }
-
-    pub fn present(&mut self) {
         self.canvas.present();
-    }
-
-    pub fn clear_screen(&mut self) {
-        self.screen.iter_mut().for_each(|row| {
-            row.iter_mut().for_each(|pixel| {
-                *pixel = 0;
-            })
-        });
     }
 }

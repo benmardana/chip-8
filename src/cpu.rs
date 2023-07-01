@@ -1,3 +1,5 @@
+use std::{fs::read, path::Path};
+
 use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -66,58 +68,17 @@ impl CPU {
         Default::default()
     }
 
-    pub fn set_mem(&mut self, index: usize, value: u16) {
-        self.memory[index] = value;
-    }
-
-    pub fn get_mem(&self, index: usize) -> u16 {
-        let part_one = self.memory[index as usize];
-        let _part_two = self.memory[(index + 1) as usize];
-        return part_one;
-    }
-
-    pub fn get_index(&self) -> u16 {
-        self.i
-    }
-
-    pub fn set_index(&mut self, value: u16) {
-        self.i = value;
-    }
-
-    pub fn set_pc(&mut self, value: u16) {
-        self.pc = value;
-    }
-
-    pub fn get_register(&mut self, register: usize) -> u8 {
-        self.registers[register]
-    }
-
-    pub fn set_register(&mut self, register: usize, value: u8) -> Result<(), String> {
-        if value > 15 {
-            return Err("register out of bounds".to_string());
-        }
-        self.registers[register] = value;
-        Ok(())
-    }
-
-    pub fn add_to_register(&mut self, register: usize, value: u8) -> Result<(), String> {
-        if value > 15 {
-            return Err("register out of bounds".to_string());
-        }
-        self.registers[register] += value;
-        Ok(())
+    pub fn load_program(&mut self, path: &Path) {
+        let bytes = read(path).unwrap();
+        bytes.iter().enumerate().for_each(|(i, &x)| {
+            self.memory[0x200 + i] = x.into();
+        });
     }
 
     pub fn fetch(&mut self) -> u16 {
         let instruction = self.read_current_instruction();
         self.pc += 2;
         instruction
-    }
-
-    fn read_current_instruction(&mut self) -> u16 {
-        let part_one = self.memory[self.pc as usize];
-        let part_two = self.memory[(self.pc + 1) as usize];
-        return (part_one << 8) | part_two as u16;
     }
 
     pub fn decode(&self, instruction: u16) -> OpCode {
@@ -139,7 +100,65 @@ impl CPU {
         }
     }
 
-    pub fn update_screen(&mut self, x: usize, y: usize, n: u16) -> () {
+    pub fn execute(&mut self, opcode: OpCode) {
+        match opcode {
+            OpCode::ClearScreen => self.clear_screen(),
+            OpCode::Jump(n) => self.set_pc(n),
+            OpCode::SetRegister(x, n) => self.set_register(x, n).unwrap(),
+            OpCode::AddToRegister(x, n) => self.add_to_register(x, n).unwrap(),
+            OpCode::Draw(x, y, n) => self.update_screen(x, y, n),
+            OpCode::SetIndex(n) => self.set_index(n),
+            OpCode::None => (),
+        };
+    }
+
+    fn get_index(&self) -> u16 {
+        self.i
+    }
+
+    fn set_index(&mut self, value: u16) {
+        self.i = value;
+    }
+
+    fn set_pc(&mut self, value: u16) {
+        self.pc = value;
+    }
+
+    fn get_register(&mut self, register: usize) -> u8 {
+        self.registers[register]
+    }
+
+    fn set_register(&mut self, register: usize, value: u8) -> Result<(), String> {
+        if value > 15 {
+            return Err("register out of bounds".to_string());
+        }
+        self.registers[register] = value;
+        Ok(())
+    }
+
+    fn add_to_register(&mut self, register: usize, value: u8) -> Result<(), String> {
+        if value > 15 {
+            return Err("register out of bounds".to_string());
+        }
+        self.registers[register] += value;
+        Ok(())
+    }
+
+    fn read_current_instruction(&mut self) -> u16 {
+        let part_one = self.memory[self.pc as usize];
+        let part_two = self.memory[(self.pc + 1) as usize];
+        return (part_one << 8) | part_two as u16;
+    }
+
+    fn clear_screen(&mut self) {
+        self.screen.iter_mut().for_each(|row| {
+            row.iter_mut().for_each(|pixel| {
+                *pixel = 0;
+            })
+        });
+    }
+
+    fn update_screen(&mut self, x: usize, y: usize, n: u16) -> () {
         let mut x_coord = self.get_register(x) % 64;
         let mut y_coord = self.get_register(y) % 32;
         let _ = self.set_register(0xF, 0);
@@ -147,7 +166,7 @@ impl CPU {
             let sprite_index = (self.get_index() + sprite_row) as usize;
 
             // get nth sprite counting from memory address in I
-            let sprite_byte = self.get_mem(sprite_index) as u8;
+            let sprite_byte = self.memory[sprite_index] as u8;
 
             // For each of the 8 pixels/bits in this sprite row (from left to right, ie. from most to least significant bit):
             for bit in 0..8 {
@@ -181,45 +200,5 @@ impl CPU {
                 break;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_simple_decode() {
-        let mut chip_8 = CPU::new();
-        chip_8.set_mem(0xA0, 0x00E0);
-        chip_8.set_mem(0xA1, 0x1123);
-        chip_8.set_mem(0xA2, 0x6123);
-        chip_8.set_mem(0xA3, 0x7123);
-        chip_8.set_mem(0xA4, 0xA123);
-        chip_8.set_mem(0xA5, 0xD123);
-        chip_8.set_mem(0xA6, 0xC123);
-
-        let mut instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::ClearScreen);
-
-        instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::Jump(291));
-
-        instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::SetRegister(1, 35));
-
-        instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::AddToRegister(1, 35));
-
-        instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::SetIndex(291));
-
-        instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::Draw(1, 2, 3));
-
-        instruction = chip_8.fetch();
-        assert_eq!(chip_8.decode(instruction), OpCode::None);
-
-        return;
     }
 }

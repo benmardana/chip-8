@@ -10,7 +10,8 @@ pub enum OpCode {
     AddToRegister(usize, u8),
     Draw(usize, usize, u16),
     SetIndex(u16),
-    None,
+    ToDo,
+    NoOp,
 }
 
 #[derive(Debug)]
@@ -91,12 +92,41 @@ impl CPU {
 
         match (kind, x, y, n) {
             (0x0, 0x0, 0xE, 0x0) => OpCode::ClearScreen,
+            (0x0, 0x0, 0xE, 0xE) => OpCode::ToDo,
             (0x1, _, _, _) => OpCode::Jump(nnn),
+            (0x2, _, _, _) => OpCode::ToDo,
+            (0x3, x, _, _) => OpCode::ToDo,
+            (0x4, x, _, _) => OpCode::ToDo,
+            (0x5, x, _, _) => OpCode::ToDo,
             (0x6, x, _, _) => OpCode::SetRegister(x, nn),
             (0x7, x, _, _) => OpCode::AddToRegister(x, nn),
+            (0x8, x, y, 0x0) => OpCode::ToDo,
+            (0x8, x, y, 0x1) => OpCode::ToDo,
+            (0x8, x, y, 0x2) => OpCode::ToDo,
+            (0x8, x, y, 0x3) => OpCode::ToDo,
+            (0x8, x, y, 0x4) => OpCode::ToDo,
+            (0x8, x, y, 0x5) => OpCode::ToDo,
+            (0x8, x, y, 0x6) => OpCode::ToDo,
+            (0x8, x, y, 0x7) => OpCode::ToDo,
+            (0x8, x, y, 0x8) => OpCode::ToDo,
+            (0x9, x, _, _) => OpCode::ToDo,
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
+            (0xB, _, _, _) => OpCode::ToDo,
+            (0xC, x, _, _) => OpCode::ToDo,
             (0xD, x, y, n) => OpCode::Draw(x, y, n),
-            _ => OpCode::None,
+            (0xE, x, 0x9, 0xE) => OpCode::ToDo,
+            (0xE, x, 0xA, 0x1) => OpCode::ToDo,
+            (0xF, x, 0x0, 0x7) => OpCode::ToDo,
+            (0xF, x, 0x1, 0x5) => OpCode::ToDo,
+            (0xF, x, 0x1, 0x8) => OpCode::ToDo,
+            (0xF, x, 0x1, 0xE) => OpCode::ToDo,
+            (0xF, x, 0x0, 0xA) => OpCode::ToDo,
+            (0xF, x, 0x2, 0x9) => OpCode::ToDo,
+            (0xF, x, 0x3, 0x3) => OpCode::ToDo,
+            (0xF, x, 0x5, 0x5) => OpCode::ToDo,
+            (0xF, x, 0x6, 0x5) => OpCode::ToDo,
+            (0x0, _, _, _) => OpCode::NoOp,
+            _ => OpCode::NoOp,
         }
     }
 
@@ -108,7 +138,8 @@ impl CPU {
             OpCode::AddToRegister(x, n) => self.add_to_register(x, n).unwrap(),
             OpCode::Draw(x, y, n) => self.update_screen(x, y, n),
             OpCode::SetIndex(n) => self.set_index(n),
-            OpCode::None => (),
+            OpCode::ToDo => todo!(),
+            OpCode::NoOp => (),
         };
     }
 

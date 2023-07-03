@@ -10,6 +10,9 @@ pub enum OpCode {
     AddToRegister(usize, u8),
     Draw(usize, usize, u16),
     SetIndex(u16),
+    CallSubroutine(u16),
+    ReturnFromSubroutine,
+    Skip,
     ToDo,
     NoOp,
 }
@@ -78,11 +81,11 @@ impl CPU {
 
     pub fn fetch(&mut self) -> u16 {
         let instruction = self.read_current_instruction();
-        self.pc += 2;
+        self.skip();
         instruction
     }
 
-    pub fn decode(&self, instruction: u16) -> OpCode {
+    pub fn decode(&mut self, instruction: u16) -> OpCode {
         let kind = (instruction & 0xF000) >> 12;
         let x = ((instruction & 0x0F00) >> 8) as usize;
         let y = ((instruction & 0x00F0) >> 4) as usize;
@@ -92,12 +95,33 @@ impl CPU {
 
         match (kind, x, y, n) {
             (0x0, 0x0, 0xE, 0x0) => OpCode::ClearScreen,
-            (0x0, 0x0, 0xE, 0xE) => OpCode::ToDo,
             (0x1, _, _, _) => OpCode::Jump(nnn),
-            (0x2, _, _, _) => OpCode::ToDo,
-            (0x3, x, _, _) => OpCode::ToDo,
-            (0x4, x, _, _) => OpCode::ToDo,
-            (0x5, x, _, _) => OpCode::ToDo,
+            (0x0, 0x0, 0xE, 0xE) => OpCode::ReturnFromSubroutine,
+            (0x2, _, _, _) => OpCode::CallSubroutine(nnn),
+            (0x3, x, _, _) => {
+                if self.get_register(x).unwrap() == nn {
+                    return OpCode::Skip;
+                }
+                OpCode::NoOp
+            }
+            (0x4, x, _, _) => {
+                if self.get_register(x).unwrap() != nn {
+                    return OpCode::Skip;
+                }
+                OpCode::NoOp
+            }
+            (0x5, x, y, 0x0) => {
+                if self.get_register(x).unwrap() == self.get_register(y).unwrap() {
+                    return OpCode::Skip;
+                }
+                OpCode::NoOp
+            }
+            (0x9, x, y, 0x0) => {
+                if self.get_register(x).unwrap() != self.get_register(y).unwrap() {
+                    return OpCode::Skip;
+                }
+                OpCode::NoOp
+            }
             (0x6, x, _, _) => OpCode::SetRegister(x, nn),
             (0x7, x, _, _) => OpCode::AddToRegister(x, nn),
             (0x8, x, y, 0x0) => OpCode::ToDo,
@@ -109,7 +133,6 @@ impl CPU {
             (0x8, x, y, 0x6) => OpCode::ToDo,
             (0x8, x, y, 0x7) => OpCode::ToDo,
             (0x8, x, y, 0x8) => OpCode::ToDo,
-            (0x9, x, _, _) => OpCode::ToDo,
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
             (0xB, _, _, _) => OpCode::ToDo,
             (0xC, x, _, _) => OpCode::ToDo,
@@ -138,9 +161,16 @@ impl CPU {
             OpCode::AddToRegister(x, n) => self.add_to_register(x, n).unwrap(),
             OpCode::Draw(x, y, n) => self.update_screen(x, y, n),
             OpCode::SetIndex(n) => self.set_index(n),
+            OpCode::CallSubroutine(n) => self.call_subroutine(n),
+            OpCode::ReturnFromSubroutine => self.return_from_subroutine(),
+            OpCode::Skip => self.skip(),
             OpCode::ToDo => todo!(),
             OpCode::NoOp => (),
         };
+    }
+
+    fn skip(&mut self) {
+        self.pc += 2
     }
 
     fn get_index(&self) -> u16 {
@@ -148,28 +178,42 @@ impl CPU {
     }
 
     fn set_index(&mut self, value: u16) {
-        self.i = value;
+        self.i = value
     }
 
     fn set_pc(&mut self, value: u16) {
-        self.pc = value;
+        self.pc = value
     }
 
-    fn get_register(&mut self, register: usize) -> u8 {
-        self.registers[register]
+    fn return_from_subroutine(&mut self) {
+        let last_address = self.stack.pop().unwrap();
+        self.set_pc(last_address)
+    }
+
+    fn call_subroutine(&mut self, address: u16) {
+        let current_pc = self.pc;
+        self.stack.push(current_pc);
+        self.set_pc(address)
+    }
+
+    fn get_register(&mut self, register: usize) -> Result<u8, String> {
+        if register > 15 {
+            return Err(format!("register out of bounds - {}", register));
+        }
+        Ok(self.registers[register])
     }
 
     fn set_register(&mut self, register: usize, value: u8) -> Result<(), String> {
-        if value > 15 {
-            return Err("register out of bounds".to_string());
+        if register > 15 {
+            return Err(format!("register out of bounds - {}", register));
         }
         self.registers[register] = value;
         Ok(())
     }
 
     fn add_to_register(&mut self, register: usize, value: u8) -> Result<(), String> {
-        if value > 15 {
-            return Err("register out of bounds".to_string());
+        if register > 15 {
+            return Err(format!("register out of bounds - {}", register));
         }
         self.registers[register] += value;
         Ok(())
@@ -190,8 +234,8 @@ impl CPU {
     }
 
     fn update_screen(&mut self, x: usize, y: usize, n: u16) -> () {
-        let mut x_coord = self.get_register(x) % 64;
-        let mut y_coord = self.get_register(y) % 32;
+        let mut x_coord = self.get_register(x).unwrap() % 64;
+        let mut y_coord = self.get_register(y).unwrap() % 32;
         let _ = self.set_register(0xF, 0);
         for sprite_row in 0..n {
             let sprite_index = (self.get_index() + sprite_row) as usize;
@@ -222,7 +266,7 @@ impl CPU {
                 x_coord += 1;
                 // END FOR
             }
-            x_coord = self.get_register(x) % 64;
+            x_coord = self.get_register(x).unwrap() % 64;
 
             // Increment Y (VY is not incremented)
             y_coord += 1;

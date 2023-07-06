@@ -1,4 +1,5 @@
-use std::{fs::read, path::Path};
+use rand::{thread_rng, Rng};
+use std::{fs::read, ops::Add, path::Path};
 
 use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
 
@@ -134,15 +135,29 @@ impl CPU {
             (0x8, x, y, 0x3) => OpCode::SetRegister(x, (x ^ y).try_into().unwrap()),
             (0x8, x, y, 0x4) => OpCode::Add(x, y),
             (0x8, x, y, 0x5) => OpCode::Subtract(x, y),
-            (0x8, x, y, 0x6) => OpCode::ShiftRight(x),
+            (0x8, x, _, 0x6) => OpCode::ShiftRight(x),
             (0x8, x, y, 0x7) => OpCode::Subtract(y, x),
-            (0x8, x, y, 0xE) => OpCode::ShiftLeft(x),
+            (0x8, x, _, 0xE) => OpCode::ShiftLeft(x),
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
-            (0xB, _, _, _) => OpCode::ToDo,
-            (0xC, x, _, _) => OpCode::ToDo,
+            (0xB, _, _, _) => OpCode::Jump(
+                nnn.add(TryInto::<u16>::try_into(self.get_register(0).unwrap()).unwrap()),
+            ),
+            (0xC, x, _, _) => OpCode::SetRegister(x, thread_rng().gen::<u8>() & nn),
             (0xD, x, y, n) => OpCode::Draw(x, y, n),
-            (0xE, x, 0x9, 0xE) => OpCode::ToDo,
-            (0xE, x, 0xA, 0x1) => OpCode::ToDo,
+            (0xE, x, 0x9, 0xE) => {
+                let key = self.get_register(x).unwrap();
+                if self.key_pressed(key) {
+                    return OpCode::Skip;
+                }
+                OpCode::NoOp
+            }
+            (0xE, x, 0xA, 0x1) => {
+                let key = self.get_register(x).unwrap();
+                if !self.key_pressed(key) {
+                    return OpCode::Skip;
+                }
+                OpCode::NoOp
+            }
             (0xF, x, 0x0, 0x7) => OpCode::ToDo,
             (0xF, x, 0x1, 0x5) => OpCode::ToDo,
             (0xF, x, 0x1, 0x8) => OpCode::ToDo,
@@ -245,6 +260,10 @@ impl CPU {
         self.set_pc(address)
     }
 
+    fn key_pressed(&self, key: u8) -> bool {
+        key.is_power_of_two()
+    }
+
     fn get_register(&mut self, register: usize) -> Result<u8, String> {
         if register > 15 {
             return Err(format!("register out of bounds - {}", register));
@@ -268,7 +287,7 @@ impl CPU {
         if register > 15 {
             return Err(format!("register out of bounds - {}", register));
         }
-        // self.registers[register] += value;
+        let _ = self.registers[register].wrapping_add(value);
         Ok(())
     }
 

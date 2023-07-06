@@ -13,6 +13,10 @@ pub enum OpCode {
     CallSubroutine(u16),
     ReturnFromSubroutine,
     Skip,
+    Add(usize, usize),
+    Subtract(usize, usize),
+    ShiftRight(usize),
+    ShiftLeft(usize),
     ToDo,
     NoOp,
 }
@@ -124,15 +128,15 @@ impl CPU {
             }
             (0x6, x, _, _) => OpCode::SetRegister(x, nn),
             (0x7, x, _, _) => OpCode::AddToRegister(x, nn),
-            (0x8, x, y, 0x0) => OpCode::ToDo,
-            (0x8, x, y, 0x1) => OpCode::ToDo,
-            (0x8, x, y, 0x2) => OpCode::ToDo,
-            (0x8, x, y, 0x3) => OpCode::ToDo,
-            (0x8, x, y, 0x4) => OpCode::ToDo,
-            (0x8, x, y, 0x5) => OpCode::ToDo,
-            (0x8, x, y, 0x6) => OpCode::ToDo,
-            (0x8, x, y, 0x7) => OpCode::ToDo,
-            (0x8, x, y, 0x8) => OpCode::ToDo,
+            (0x8, x, y, 0x0) => OpCode::SetRegister(x, y.try_into().unwrap()),
+            (0x8, x, y, 0x1) => OpCode::SetRegister(x, (x | y).try_into().unwrap()),
+            (0x8, x, y, 0x2) => OpCode::SetRegister(x, (x & y).try_into().unwrap()),
+            (0x8, x, y, 0x3) => OpCode::SetRegister(x, (x ^ y).try_into().unwrap()),
+            (0x8, x, y, 0x4) => OpCode::Add(x, y),
+            (0x8, x, y, 0x5) => OpCode::Subtract(x, y),
+            (0x8, x, y, 0x6) => OpCode::ShiftRight(x),
+            (0x8, x, y, 0x7) => OpCode::Subtract(y, x),
+            (0x8, x, y, 0xE) => OpCode::ShiftLeft(x),
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
             (0xB, _, _, _) => OpCode::ToDo,
             (0xC, x, _, _) => OpCode::ToDo,
@@ -166,7 +170,52 @@ impl CPU {
             OpCode::Skip => self.skip(),
             OpCode::ToDo => todo!(),
             OpCode::NoOp => (),
+            OpCode::Add(x, y) => self.add(x, y),
+            OpCode::Subtract(x, y) => self.subtract(x, y),
+            OpCode::ShiftRight(x) => self.shift_right(x),
+            OpCode::ShiftLeft(x) => self.shift_left(x),
         };
+    }
+
+    fn add(&mut self, x: usize, y: usize) {
+        let vx = self.get_register(x).unwrap();
+        let vy = self.get_register(y).unwrap();
+        match vx.checked_add(vy) {
+            None => self.set_carry(1),
+            _ => {}
+        };
+        self.set_register(x, vx.wrapping_add(vy).try_into().unwrap())
+            .unwrap();
+    }
+
+    fn subtract(&mut self, x: usize, y: usize) {
+        let vx = self.get_register(x).unwrap();
+        let vy = self.get_register(y).unwrap();
+        if vx > vy {
+            self.set_carry(1)
+        } else {
+            self.set_carry(0)
+        }
+        self.set_register(x, vx.wrapping_sub(vy).try_into().unwrap())
+            .unwrap();
+    }
+
+    fn shift_right(&mut self, x: usize) {
+        // Set VF to 1 if the bit that was shifted out was 1, or 0 if it was 0
+        let shifted_bit = (x & 0b0001) >> 3;
+        self.set_carry(shifted_bit.try_into().unwrap());
+        // Shift the value of VX one bit to the right
+        let vx = self.get_register(x).unwrap();
+        self.set_register(x, vx >> 1).unwrap();
+    }
+
+    fn shift_left(&mut self, x: usize) {
+        // Set VF to 1 if the bit that was shifted out was 1, or 0 if it was 0
+        let shifted_bit = (x & 0b1000) >> 3;
+        self.set_carry(shifted_bit.try_into().unwrap());
+        // Shift the value of VX one bit to the left
+        let vx = self.get_register(x).unwrap();
+        self.set_register(x, vx << 1).unwrap();
     }
 
     fn skip(&mut self) {
@@ -211,11 +260,15 @@ impl CPU {
         Ok(())
     }
 
+    fn set_carry(&mut self, value: u8) {
+        self.registers[0xF] = value;
+    }
+
     fn add_to_register(&mut self, register: usize, value: u8) -> Result<(), String> {
         if register > 15 {
             return Err(format!("register out of bounds - {}", register));
         }
-        self.registers[register] += value;
+        // self.registers[register] += value;
         Ok(())
     }
 

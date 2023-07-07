@@ -61,8 +61,8 @@ impl Default for CPU {
             memory: [0u16; 4096],
             stack: Vec::new(),
             registers: [0u8; 16],
-            delay_timer: u8::MAX,
-            sound_timer: u8::MAX,
+            delay_timer: 0u8,
+            sound_timer: 0u8,
             screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         };
         FONT.iter().enumerate().for_each(|(i, &x)| {
@@ -190,6 +190,15 @@ impl CPU {
             OpCode::ShiftRight(x) => self.shift_right(x),
             OpCode::ShiftLeft(x) => self.shift_left(x),
         };
+    }
+
+    pub fn drop_timers(&mut self) {
+        self.delay_timer -= 1;
+        self.sound_timer -= 1;
+    }
+
+    pub fn should_beep(&self) -> bool {
+        self.sound_timer > 0
     }
 
     fn add(&mut self, x: usize, y: usize) {

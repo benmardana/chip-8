@@ -7,15 +7,14 @@ pub const GRID_X_SIZE: u32 = 64;
 pub const GRID_Y_SIZE: u32 = 32;
 pub const DOT_SIZE_IN_PXS: u32 = 10;
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     canvas: WindowCanvas,
-    sdl_context: Sdl,
+    sdl_context: &'a Sdl,
     pub screen: [[u8; 64]; 32],
 }
 
-impl Renderer {
-    pub fn new() -> Result<Renderer, String> {
-        let sdl_context = sdl2::init().unwrap();
+impl Renderer<'_> {
+    pub fn new(sdl_context: &Sdl) -> Result<Renderer, String> {
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem
             .window(

@@ -18,6 +18,8 @@ pub enum OpCode {
     Subtract(usize, usize),
     ShiftRight(usize),
     ShiftLeft(usize),
+    SetDelayTimer(u8),
+    SetSoundTimer(u8),
     ToDo,
     NoOp,
 }
@@ -158,9 +160,9 @@ impl CPU {
                 }
                 OpCode::NoOp
             }
-            (0xF, x, 0x0, 0x7) => OpCode::ToDo,
-            (0xF, x, 0x1, 0x5) => OpCode::ToDo,
-            (0xF, x, 0x1, 0x8) => OpCode::ToDo,
+            (0xF, x, 0x0, 0x7) => OpCode::SetRegister(x, self.delay_timer),
+            (0xF, x, 0x1, 0x5) => OpCode::SetDelayTimer(self.get_register(x).unwrap()),
+            (0xF, x, 0x1, 0x8) => OpCode::SetSoundTimer(self.get_register(x).unwrap()),
             (0xF, x, 0x1, 0xE) => OpCode::ToDo,
             (0xF, x, 0x0, 0xA) => OpCode::ToDo,
             (0xF, x, 0x2, 0x9) => OpCode::ToDo,
@@ -189,12 +191,22 @@ impl CPU {
             OpCode::Subtract(x, y) => self.subtract(x, y),
             OpCode::ShiftRight(x) => self.shift_right(x),
             OpCode::ShiftLeft(x) => self.shift_left(x),
+            OpCode::SetDelayTimer(x) => self.set_delay_timer(x),
+            OpCode::SetSoundTimer(x) => self.set_sound_timer(x),
         };
     }
 
+    fn set_delay_timer(&mut self, val: u8) {
+        self.delay_timer = val;
+    }
+
+    fn set_sound_timer(&mut self, val: u8) {
+        self.sound_timer = val;
+    }
+
     pub fn drop_timers(&mut self) {
-        self.delay_timer -= 1;
-        self.sound_timer -= 1;
+        self.delay_timer = self.delay_timer.saturating_sub(1);
+        self.sound_timer = self.sound_timer.saturating_sub(1);
     }
 
     pub fn should_beep(&self) -> bool {

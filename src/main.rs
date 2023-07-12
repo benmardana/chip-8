@@ -23,9 +23,11 @@ fn main() {
 
     let mut cycle: usize = 0;
 
+    let mut event_pump = renderer.event_pump();
+
     'running: loop {
         cycle += 1;
-        for event in renderer.event_pump().poll_iter() {
+        for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
@@ -36,9 +38,15 @@ fn main() {
             }
         }
 
-        let instruction = cpu.fetch();
-        let opcode = cpu.decode(instruction);
-        cpu.execute(opcode);
+        if let Some(x) = cpu.awaiting_key {
+            if let Some(key) = cpu.some_key_pressed(&event_pump) {
+                cpu.set_register(x, key).unwrap();
+            }
+        } else {
+            let instruction = cpu.fetch();
+            let opcode = cpu.decode(instruction);
+            cpu.execute(opcode, &event_pump);
+        }
 
         renderer.draw_screen(cpu.screen);
 

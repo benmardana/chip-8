@@ -1,5 +1,6 @@
 use rand::{thread_rng, Rng};
-use std::{fs::read, ops::Add, path::Path};
+use sdl2::{keyboard::Scancode, sys::KeyCode, EventPump};
+use std::{fs::read, ops::Add, path::Path, thread::sleep, time::Duration};
 
 use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
 
@@ -14,13 +15,17 @@ pub enum OpCode {
     CallSubroutine(u16),
     ReturnFromSubroutine,
     Skip,
+    SkipIfKey(usize, bool),
     Add(usize, usize),
     Subtract(usize, usize),
     ShiftRight(usize),
     ShiftLeft(usize),
     SetDelayTimer(u8),
     SetSoundTimer(u8),
-    ToDo,
+    GetKey(usize),
+    BinaryConversion(usize),
+    StoreMemory(usize),
+    LoadMemory(usize),
     NoOp,
 }
 
@@ -33,6 +38,7 @@ pub struct CPU {
     registers: [u8; 16],
     delay_timer: u8,
     sound_timer: u8,
+    pub awaiting_key: Option<usize>,
     pub screen: [[u8; 64]; 32],
 }
 
@@ -65,6 +71,7 @@ impl Default for CPU {
             registers: [0u8; 16],
             delay_timer: 0u8,
             sound_timer: 0u8,
+            awaiting_key: None,
             screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         };
         FONT.iter().enumerate().for_each(|(i, &x)| {
@@ -146,35 +153,26 @@ impl CPU {
             ),
             (0xC, x, _, _) => OpCode::SetRegister(x, thread_rng().gen::<u8>() & nn),
             (0xD, x, y, n) => OpCode::Draw(x, y, n),
-            (0xE, x, 0x9, 0xE) => {
-                let key = self.get_register(x).unwrap();
-                if self.key_pressed(key) {
-                    return OpCode::Skip;
-                }
-                OpCode::NoOp
-            }
-            (0xE, x, 0xA, 0x1) => {
-                let key = self.get_register(x).unwrap();
-                if !self.key_pressed(key) {
-                    return OpCode::Skip;
-                }
-                OpCode::NoOp
-            }
+            (0xE, x, 0x9, 0xE) => OpCode::SkipIfKey(x, true),
+            (0xE, x, 0xA, 0x1) => OpCode::SkipIfKey(x, false),
             (0xF, x, 0x0, 0x7) => OpCode::SetRegister(x, self.delay_timer),
             (0xF, x, 0x1, 0x5) => OpCode::SetDelayTimer(self.get_register(x).unwrap()),
             (0xF, x, 0x1, 0x8) => OpCode::SetSoundTimer(self.get_register(x).unwrap()),
-            (0xF, x, 0x1, 0xE) => OpCode::ToDo,
-            (0xF, x, 0x0, 0xA) => OpCode::ToDo,
-            (0xF, x, 0x2, 0x9) => OpCode::ToDo,
-            (0xF, x, 0x3, 0x3) => OpCode::ToDo,
-            (0xF, x, 0x5, 0x5) => OpCode::ToDo,
-            (0xF, x, 0x6, 0x5) => OpCode::ToDo,
+            (0xF, x, 0x1, 0xE) => OpCode::SetIndex(
+                self.get_index()
+                    .add(TryInto::<u16>::try_into(self.get_register(x).unwrap()).unwrap()),
+            ),
+            (0xF, x, 0x0, 0xA) => OpCode::GetKey(x),
+            (0xF, x, 0x2, 0x9) => OpCode::SetIndex(self.get_register(x).unwrap().into()),
+            (0xF, x, 0x3, 0x3) => OpCode::BinaryConversion(x),
+            (0xF, x, 0x5, 0x5) => OpCode::StoreMemory(x),
+            (0xF, x, 0x6, 0x5) => OpCode::LoadMemory(x),
             (0x0, _, _, _) => OpCode::NoOp,
             _ => OpCode::NoOp,
         }
     }
 
-    pub fn execute(&mut self, opcode: OpCode) {
+    pub fn execute(&mut self, opcode: OpCode, event_pump: &EventPump) {
         match opcode {
             OpCode::ClearScreen => self.clear_screen(),
             OpCode::Jump(n) => self.set_pc(n),
@@ -185,7 +183,6 @@ impl CPU {
             OpCode::CallSubroutine(n) => self.call_subroutine(n),
             OpCode::ReturnFromSubroutine => self.return_from_subroutine(),
             OpCode::Skip => self.skip(),
-            OpCode::ToDo => todo!(),
             OpCode::NoOp => (),
             OpCode::Add(x, y) => self.add(x, y),
             OpCode::Subtract(x, y) => self.subtract(x, y),
@@ -193,7 +190,21 @@ impl CPU {
             OpCode::ShiftLeft(x) => self.shift_left(x),
             OpCode::SetDelayTimer(x) => self.set_delay_timer(x),
             OpCode::SetSoundTimer(x) => self.set_sound_timer(x),
+            OpCode::SkipIfKey(x, pressed) => {
+                let key = self.get_register(x).unwrap();
+                if pressed == self.key_pressed(event_pump, key) {
+                    return self.skip();
+                }
+            }
+            OpCode::GetKey(key) => self.set_waiting_key(Some(key)),
+            OpCode::BinaryConversion(_) => todo!(),
+            OpCode::StoreMemory(x) => {}
+            OpCode::LoadMemory(_) => todo!(),
         };
+    }
+
+    fn set_waiting_key(&mut self, key: Option<usize>) {
+        self.awaiting_key = key
     }
 
     fn set_delay_timer(&mut self, val: u8) {
@@ -281,8 +292,18 @@ impl CPU {
         self.set_pc(address)
     }
 
-    fn key_pressed(&self, key: u8) -> bool {
-        key.is_power_of_two()
+    pub fn some_key_pressed(&self, event_pump: &EventPump) -> Option<u8> {
+        event_pump
+            .keyboard_state()
+            .pressed_scancodes()
+            .nth(0)
+            .map(|key| CPU::unmap(key))
+    }
+
+    fn key_pressed(&self, event_pump: &EventPump, key: u8) -> bool {
+        event_pump
+            .keyboard_state()
+            .is_scancode_pressed(CPU::map(key))
     }
 
     fn get_register(&mut self, register: usize) -> Result<u8, String> {
@@ -292,7 +313,7 @@ impl CPU {
         Ok(self.registers[register])
     }
 
-    fn set_register(&mut self, register: usize, value: u8) -> Result<(), String> {
+    pub fn set_register(&mut self, register: usize, value: u8) -> Result<(), String> {
         if register > 15 {
             return Err(format!("register out of bounds - {}", register));
         }
@@ -367,6 +388,51 @@ impl CPU {
             if y_coord == 31 {
                 break;
             }
+        }
+    }
+
+    fn map(code: u8) -> Scancode {
+        match code {
+            0x00 => Scancode::X,
+            0x01 => Scancode::Num1,
+            0x02 => Scancode::Num2,
+            0x03 => Scancode::Num3,
+            0x04 => Scancode::Q,
+            0x05 => Scancode::W,
+            0x06 => Scancode::E,
+            0x07 => Scancode::A,
+            0x08 => Scancode::S,
+            0x09 => Scancode::D,
+            0x0A => Scancode::Z,
+            0x0B => Scancode::C,
+            0x0C => Scancode::Num4,
+            0x0D => Scancode::R,
+            0x0E => Scancode::F,
+            0x0F => Scancode::V,
+            _ => Scancode::Escape,
+        }
+    }
+
+    fn unmap(code: Scancode) -> u8 {
+        match code {
+            Scancode::X => 0x00,
+            Scancode::Num1 => 0x01,
+            Scancode::Num2 => 0x02,
+            Scancode::Num3 => 0x03,
+            Scancode::Q => 0x04,
+            Scancode::W => 0x05,
+            Scancode::E => 0x06,
+            Scancode::A => 0x07,
+            Scancode::S => 0x08,
+            Scancode::D => 0x09,
+            Scancode::Z => 0x0A,
+            Scancode::C => 0x0B,
+            Scancode::Num4 => 0x0C,
+            Scancode::R => 0x0D,
+            Scancode::F => 0x0E,
+            Scancode::V => 0x0F,
+            Scancode::Escape => 0x29,
+            _ => 0x29,
         }
     }
 }

@@ -138,7 +138,6 @@ impl CPU {
             }
             (0x6, x, _, _) => OpCode::SetRegister(x, nn),
             (0x7, x, _, _) => OpCode::AddToRegister(x, nn),
-
             (0x8, x, y, 0x0) => OpCode::SetRegister(x, self.get_register(y).try_into().unwrap()),
             (0x8, x, y, 0x1) => OpCode::SetRegister(
                 x,
@@ -158,7 +157,6 @@ impl CPU {
                     .try_into()
                     .unwrap(),
             ),
-
             (0x8, x, y, 0x4) => OpCode::Add(x, y),
             (0x8, x, y, 0x5) => OpCode::Subtract(x, y),
             (0x8, x, _, 0x6) => OpCode::ShiftRight(x),
@@ -178,8 +176,10 @@ impl CPU {
             }
             (0xF, x, 0x0, 0xA) => OpCode::GetKey(x),
             (0xF, x, 0x2, 0x9) => OpCode::SetIndex(self.get_register(x).into()),
+
             (0xF, x, 0x3, 0x3) => OpCode::BinaryConversion(x),
             (0xF, x, 0x5, 0x5) => OpCode::StoreMemory(x),
+
             (0xF, x, 0x6, 0x5) => OpCode::LoadMemory(x),
             (0x0, _, _, _) => OpCode::NoOp,
             _ => OpCode::NoOp,
@@ -219,27 +219,28 @@ impl CPU {
 
     fn store_memory(&mut self, register: usize) {
         let index = self.get_index();
-        for x in 0..register {
-            let value = self.get_register(x);
-            self.memory[(index + u16::from(self.get_register(x))) as usize] = value.into();
+        for x in 0..register + 1 {
+            let vx = u16::from(self.get_register(x));
+            self.memory[usize::from(index) + x] = vx;
         }
     }
 
     fn load_memory(&mut self, register: usize) {
         let index = self.get_index();
-        for x in 0..register {
-            let value = self.memory[(index + TryInto::<u16>::try_into(x).unwrap()) as usize];
-            self.set_register(x, value.try_into().unwrap());
+        for x in 0..register + 1 {
+            let value: u8 = self.memory[usize::from(index) + x].try_into().unwrap();
+            self.set_register(x, value);
         }
     }
 
-    fn binary_conversion(&mut self, value: usize) {
+    fn binary_conversion(&mut self, register: usize) {
+        let value = self.get_register(register);
+        let (ones, tens, hundreds) = (value % 10, (value / 10) % 10, (value / 10) / 10);
+
         let index = self.get_index();
-        let num = self.get_register(value);
-        let (a, b, c) = (num % 10, (num / 10) % 10, (num / 10) / 10);
-        self.memory[index as usize] = a.into();
-        self.memory[(index + 1) as usize] = b.into();
-        self.memory[(index + 2) as usize] = c.into();
+        self.memory[usize::from(index)] = hundreds.into();
+        self.memory[usize::from(index + 1)] = tens.into();
+        self.memory[usize::from(index + 2)] = ones.into();
     }
 
     fn set_waiting_key(&mut self, key: Option<usize>) {

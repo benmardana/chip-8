@@ -1,6 +1,6 @@
 use rand::{thread_rng, Rng};
-use sdl2::{keyboard::Scancode, sys::KeyCode, EventPump};
-use std::{fs::read, ops::Add, path::Path, thread::sleep, time::Duration};
+use sdl2::{keyboard::Scancode, EventPump};
+use std::{fs::read, ops::Add, path::Path};
 
 use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
 
@@ -197,10 +197,37 @@ impl CPU {
                 }
             }
             OpCode::GetKey(key) => self.set_waiting_key(Some(key)),
-            OpCode::BinaryConversion(_) => todo!(),
-            OpCode::StoreMemory(x) => {}
-            OpCode::LoadMemory(_) => todo!(),
+            OpCode::BinaryConversion(x) => self.binary_conversion(x),
+            OpCode::StoreMemory(x) => self.store_memory(x),
+            OpCode::LoadMemory(x) => self.load_memory(x),
         };
+    }
+
+    fn store_memory(&mut self, register: usize) {
+        let index = self.get_index();
+        for x in 0..register {
+            if let Ok(value) = self.get_register(x) {
+                self.memory[(index + TryInto::<u16>::try_into(x).unwrap()) as usize] = value.into();
+            }
+        }
+    }
+
+    fn load_memory(&mut self, register: usize) {
+        let index = self.get_index();
+        for x in 0..register {
+            let value = self.memory[(index + TryInto::<u16>::try_into(x).unwrap()) as usize];
+            self.set_register(x, value.try_into().unwrap()).unwrap();
+        }
+    }
+
+    fn binary_conversion(&mut self, value: usize) {
+        let index = self.get_index();
+        if let Ok(num) = self.get_register(value) {
+            let (a, b, c) = (num % 10, (num / 10) % 10, (num / 10) / 10);
+            self.memory[index as usize] = a.into();
+            self.memory[(index + 1) as usize] = b.into();
+            self.memory[(index + 2) as usize] = c.into();
+        }
     }
 
     fn set_waiting_key(&mut self, key: Option<usize>) {

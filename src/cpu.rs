@@ -113,25 +113,25 @@ impl CPU {
             (0x0, 0x0, 0xE, 0xE) => OpCode::ReturnFromSubroutine,
             (0x2, _, _, _) => OpCode::CallSubroutine(nnn),
             (0x3, x, _, _) => {
-                if self.get_register(x).unwrap() == nn {
+                if self.get_register(x) == nn {
                     return OpCode::Skip;
                 }
                 OpCode::NoOp
             }
             (0x4, x, _, _) => {
-                if self.get_register(x).unwrap() != nn {
+                if self.get_register(x) != nn {
                     return OpCode::Skip;
                 }
                 OpCode::NoOp
             }
             (0x5, x, y, 0x0) => {
-                if self.get_register(x).unwrap() == self.get_register(y).unwrap() {
+                if self.get_register(x) == self.get_register(y) {
                     return OpCode::Skip;
                 }
                 OpCode::NoOp
             }
             (0x9, x, y, 0x0) => {
-                if self.get_register(x).unwrap() != self.get_register(y).unwrap() {
+                if self.get_register(x) != self.get_register(y) {
                     return OpCode::Skip;
                 }
                 OpCode::NoOp
@@ -148,22 +148,22 @@ impl CPU {
             (0x8, x, y, 0x7) => OpCode::Subtract(y, x),
             (0x8, x, _, 0xE) => OpCode::ShiftLeft(x),
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
-            (0xB, _, _, _) => OpCode::Jump(
-                nnn.add(TryInto::<u16>::try_into(self.get_register(0).unwrap()).unwrap()),
-            ),
+            (0xB, _, _, _) => {
+                OpCode::Jump(nnn.add(TryInto::<u16>::try_into(self.get_register(0)).unwrap()))
+            }
             (0xC, x, _, _) => OpCode::SetRegister(x, thread_rng().gen::<u8>() & nn),
             (0xD, x, y, n) => OpCode::Draw(x, y, n),
             (0xE, x, 0x9, 0xE) => OpCode::SkipIfKey(x, true),
             (0xE, x, 0xA, 0x1) => OpCode::SkipIfKey(x, false),
             (0xF, x, 0x0, 0x7) => OpCode::SetRegister(x, self.delay_timer),
-            (0xF, x, 0x1, 0x5) => OpCode::SetDelayTimer(self.get_register(x).unwrap()),
-            (0xF, x, 0x1, 0x8) => OpCode::SetSoundTimer(self.get_register(x).unwrap()),
+            (0xF, x, 0x1, 0x5) => OpCode::SetDelayTimer(self.get_register(x)),
+            (0xF, x, 0x1, 0x8) => OpCode::SetSoundTimer(self.get_register(x)),
             (0xF, x, 0x1, 0xE) => OpCode::SetIndex(
                 self.get_index()
-                    .add(TryInto::<u16>::try_into(self.get_register(x).unwrap()).unwrap()),
+                    .add(TryInto::<u16>::try_into(self.get_register(x)).unwrap()),
             ),
             (0xF, x, 0x0, 0xA) => OpCode::GetKey(x),
-            (0xF, x, 0x2, 0x9) => OpCode::SetIndex(self.get_register(x).unwrap().into()),
+            (0xF, x, 0x2, 0x9) => OpCode::SetIndex(self.get_register(x).into()),
             (0xF, x, 0x3, 0x3) => OpCode::BinaryConversion(x),
             (0xF, x, 0x5, 0x5) => OpCode::StoreMemory(x),
             (0xF, x, 0x6, 0x5) => OpCode::LoadMemory(x),
@@ -176,8 +176,8 @@ impl CPU {
         match opcode {
             OpCode::ClearScreen => self.clear_screen(),
             OpCode::Jump(n) => self.set_pc(n),
-            OpCode::SetRegister(x, n) => self.set_register(x, n).unwrap(),
-            OpCode::AddToRegister(x, n) => self.add_to_register(x, n).unwrap(),
+            OpCode::SetRegister(x, n) => self.set_register(x, n),
+            OpCode::AddToRegister(x, n) => self.add_to_register(x, n),
             OpCode::Draw(x, y, n) => self.update_screen(x, y, n),
             OpCode::SetIndex(n) => self.set_index(n),
             OpCode::CallSubroutine(n) => self.call_subroutine(n),
@@ -191,7 +191,7 @@ impl CPU {
             OpCode::SetDelayTimer(x) => self.set_delay_timer(x),
             OpCode::SetSoundTimer(x) => self.set_sound_timer(x),
             OpCode::SkipIfKey(x, pressed) => {
-                let key = self.get_register(x).unwrap();
+                let key = self.get_register(x);
                 if pressed == self.key_pressed(event_pump, key) {
                     return self.skip();
                 }
@@ -206,9 +206,10 @@ impl CPU {
     fn store_memory(&mut self, register: usize) {
         let index = self.get_index();
         for x in 0..register {
-            if let Ok(value) = self.get_register(x) {
-                self.memory[(index + TryInto::<u16>::try_into(x).unwrap()) as usize] = value.into();
-            }
+            let value = self.get_register(x);
+            self.memory
+                [(index + TryInto::<u16>::try_into(self.get_register(x)).unwrap()) as usize] =
+                value.into();
         }
     }
 
@@ -216,18 +217,17 @@ impl CPU {
         let index = self.get_index();
         for x in 0..register {
             let value = self.memory[(index + TryInto::<u16>::try_into(x).unwrap()) as usize];
-            self.set_register(x, value.try_into().unwrap()).unwrap();
+            self.set_register(x, value.try_into().unwrap());
         }
     }
 
     fn binary_conversion(&mut self, value: usize) {
         let index = self.get_index();
-        if let Ok(num) = self.get_register(value) {
-            let (a, b, c) = (num % 10, (num / 10) % 10, (num / 10) / 10);
-            self.memory[index as usize] = a.into();
-            self.memory[(index + 1) as usize] = b.into();
-            self.memory[(index + 2) as usize] = c.into();
-        }
+        let num = self.get_register(value);
+        let (a, b, c) = (num % 10, (num / 10) % 10, (num / 10) / 10);
+        self.memory[index as usize] = a.into();
+        self.memory[(index + 1) as usize] = b.into();
+        self.memory[(index + 2) as usize] = c.into();
     }
 
     fn set_waiting_key(&mut self, key: Option<usize>) {
@@ -252,26 +252,24 @@ impl CPU {
     }
 
     fn add(&mut self, x: usize, y: usize) {
-        let vx = self.get_register(x).unwrap();
-        let vy = self.get_register(y).unwrap();
+        let vx = self.get_register(x);
+        let vy = self.get_register(y);
         match vx.checked_add(vy) {
             None => self.set_carry(1),
             _ => {}
         };
-        self.set_register(x, vx.wrapping_add(vy).try_into().unwrap())
-            .unwrap();
+        self.set_register(x, vx.wrapping_add(vy).try_into().unwrap());
     }
 
     fn subtract(&mut self, x: usize, y: usize) {
-        let vx = self.get_register(x).unwrap();
-        let vy = self.get_register(y).unwrap();
+        let vx = self.get_register(x);
+        let vy = self.get_register(y);
         if vx > vy {
             self.set_carry(1)
         } else {
             self.set_carry(0)
         }
-        self.set_register(x, vx.wrapping_sub(vy).try_into().unwrap())
-            .unwrap();
+        self.set_register(x, vx.wrapping_sub(vy).try_into().unwrap());
     }
 
     fn shift_right(&mut self, x: usize) {
@@ -279,8 +277,8 @@ impl CPU {
         let shifted_bit = (x & 0b0001) >> 3;
         self.set_carry(shifted_bit.try_into().unwrap());
         // Shift the value of VX one bit to the right
-        let vx = self.get_register(x).unwrap();
-        self.set_register(x, vx >> 1).unwrap();
+        let vx = self.get_register(x);
+        self.set_register(x, vx >> 1);
     }
 
     fn shift_left(&mut self, x: usize) {
@@ -288,8 +286,8 @@ impl CPU {
         let shifted_bit = (x & 0b1000) >> 3;
         self.set_carry(shifted_bit.try_into().unwrap());
         // Shift the value of VX one bit to the left
-        let vx = self.get_register(x).unwrap();
-        self.set_register(x, vx << 1).unwrap();
+        let vx = self.get_register(x);
+        self.set_register(x, vx << 1);
     }
 
     fn skip(&mut self) {
@@ -333,31 +331,20 @@ impl CPU {
             .is_scancode_pressed(CPU::map(key))
     }
 
-    fn get_register(&mut self, register: usize) -> Result<u8, String> {
-        if register > 15 {
-            return Err(format!("register out of bounds - {}", register));
-        }
-        Ok(self.registers[register])
+    fn get_register(&mut self, register: usize) -> u8 {
+        self.registers[register]
     }
 
-    pub fn set_register(&mut self, register: usize, value: u8) -> Result<(), String> {
-        if register > 15 {
-            return Err(format!("register out of bounds - {}", register));
-        }
+    pub fn set_register(&mut self, register: usize, value: u8) {
         self.registers[register] = value;
-        Ok(())
     }
 
     fn set_carry(&mut self, value: u8) {
         self.registers[0xF] = value;
     }
 
-    fn add_to_register(&mut self, register: usize, value: u8) -> Result<(), String> {
-        if register > 15 {
-            return Err(format!("register out of bounds - {}", register));
-        }
-        let _ = self.registers[register].wrapping_add(value);
-        Ok(())
+    fn add_to_register(&mut self, register: usize, value: u8) {
+        self.set_register(register, self.registers[register].wrapping_add(value));
     }
 
     fn read_current_instruction(&mut self) -> u16 {
@@ -375,8 +362,8 @@ impl CPU {
     }
 
     fn update_screen(&mut self, x: usize, y: usize, n: u16) -> () {
-        let mut x_coord = self.get_register(x).unwrap() % 64;
-        let mut y_coord = self.get_register(y).unwrap() % 32;
+        let mut x_coord = self.get_register(x) % 64;
+        let mut y_coord = self.get_register(y) % 32;
         let _ = self.set_register(0xF, 0);
         for sprite_row in 0..n {
             let sprite_index = (self.get_index() + sprite_row) as usize;
@@ -407,7 +394,7 @@ impl CPU {
                 x_coord += 1;
                 // END FOR
             }
-            x_coord = self.get_register(x).unwrap() % 64;
+            x_coord = self.get_register(x) % 64;
 
             // Increment Y (VY is not incremented)
             y_coord += 1;

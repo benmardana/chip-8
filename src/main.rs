@@ -40,7 +40,7 @@ fn main() {
 
         if let Some(x) = cpu.awaiting_key {
             if let Some(key) = cpu.some_key_pressed(&event_pump) {
-                cpu.set_register(x, key).unwrap();
+                cpu.set_register(x, key);
             }
         } else {
             let instruction = cpu.fetch();

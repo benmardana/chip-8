@@ -138,19 +138,34 @@ impl CPU {
             }
             (0x6, x, _, _) => OpCode::SetRegister(x, nn),
             (0x7, x, _, _) => OpCode::AddToRegister(x, nn),
-            (0x8, x, y, 0x0) => OpCode::SetRegister(x, y.try_into().unwrap()),
-            (0x8, x, y, 0x1) => OpCode::SetRegister(x, (x | y).try_into().unwrap()),
-            (0x8, x, y, 0x2) => OpCode::SetRegister(x, (x & y).try_into().unwrap()),
-            (0x8, x, y, 0x3) => OpCode::SetRegister(x, (x ^ y).try_into().unwrap()),
+
+            (0x8, x, y, 0x0) => OpCode::SetRegister(x, self.get_register(y).try_into().unwrap()),
+            (0x8, x, y, 0x1) => OpCode::SetRegister(
+                x,
+                (usize::from(self.get_register(x)) | usize::from(self.get_register(y)))
+                    .try_into()
+                    .unwrap(),
+            ),
+            (0x8, x, y, 0x2) => OpCode::SetRegister(
+                x,
+                (usize::from(self.get_register(x)) & usize::from(self.get_register(y)))
+                    .try_into()
+                    .unwrap(),
+            ),
+            (0x8, x, y, 0x3) => OpCode::SetRegister(
+                x,
+                (usize::from(self.get_register(x)) ^ usize::from(self.get_register(y)))
+                    .try_into()
+                    .unwrap(),
+            ),
+
             (0x8, x, y, 0x4) => OpCode::Add(x, y),
             (0x8, x, y, 0x5) => OpCode::Subtract(x, y),
             (0x8, x, _, 0x6) => OpCode::ShiftRight(x),
             (0x8, x, y, 0x7) => OpCode::Subtract(y, x),
             (0x8, x, _, 0xE) => OpCode::ShiftLeft(x),
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
-            (0xB, _, _, _) => {
-                OpCode::Jump(nnn.add(TryInto::<u16>::try_into(self.get_register(0)).unwrap()))
-            }
+            (0xB, _, _, _) => OpCode::Jump(nnn.add(u16::from(self.get_register(0)))),
             (0xC, x, _, _) => OpCode::SetRegister(x, thread_rng().gen::<u8>() & nn),
             (0xD, x, y, n) => OpCode::Draw(x, y, n),
             (0xE, x, 0x9, 0xE) => OpCode::SkipIfKey(x, true),
@@ -158,10 +173,9 @@ impl CPU {
             (0xF, x, 0x0, 0x7) => OpCode::SetRegister(x, self.delay_timer),
             (0xF, x, 0x1, 0x5) => OpCode::SetDelayTimer(self.get_register(x)),
             (0xF, x, 0x1, 0x8) => OpCode::SetSoundTimer(self.get_register(x)),
-            (0xF, x, 0x1, 0xE) => OpCode::SetIndex(
-                self.get_index()
-                    .add(TryInto::<u16>::try_into(self.get_register(x)).unwrap()),
-            ),
+            (0xF, x, 0x1, 0xE) => {
+                OpCode::SetIndex(self.get_index().add(u16::from(self.get_register(x))))
+            }
             (0xF, x, 0x0, 0xA) => OpCode::GetKey(x),
             (0xF, x, 0x2, 0x9) => OpCode::SetIndex(self.get_register(x).into()),
             (0xF, x, 0x3, 0x3) => OpCode::BinaryConversion(x),
@@ -207,9 +221,7 @@ impl CPU {
         let index = self.get_index();
         for x in 0..register {
             let value = self.get_register(x);
-            self.memory
-                [(index + TryInto::<u16>::try_into(self.get_register(x)).unwrap()) as usize] =
-                value.into();
+            self.memory[(index + u16::from(self.get_register(x))) as usize] = value.into();
         }
     }
 

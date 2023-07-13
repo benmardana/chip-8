@@ -7,13 +7,13 @@ pub const GRID_X_SIZE: u32 = 64;
 pub const GRID_Y_SIZE: u32 = 32;
 pub const DOT_SIZE_IN_PXS: u32 = 10;
 
-pub struct Renderer<'a> {
+pub struct Renderer {
     canvas: WindowCanvas,
-    sdl_context: &'a Sdl,
+    sdl_context: Sdl,
     pub screen: [[u8; 64]; 32],
 }
 
-impl Renderer<'_> {
+impl Renderer {
     pub fn new(sdl_context: &Sdl) -> Result<Renderer, String> {
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem
@@ -29,7 +29,7 @@ impl Renderer<'_> {
         let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
         Ok(Renderer {
             canvas,
-            sdl_context,
+            sdl_context: sdl_context.clone(),
             screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         })
     }
@@ -55,13 +55,13 @@ impl Renderer<'_> {
 
     pub fn draw_screen(&mut self, screen: [[u8; 64]; 32]) {
         self.draw_background();
-        for row in 0..screen.len() {
-            for col in 0..screen[row].len() {
-                if screen[row][col] != 0 {
-                    self.draw_pixel(col.try_into().unwrap(), row.try_into().unwrap());
+        screen.iter().enumerate().for_each(|(y, row)| {
+            row.iter().enumerate().for_each(|(x, &pixel)| {
+                if pixel != 0 {
+                    self.draw_pixel(x.try_into().unwrap(), y.try_into().unwrap());
                 }
-            }
-        }
+            })
+        });
         self.canvas.present();
     }
 }

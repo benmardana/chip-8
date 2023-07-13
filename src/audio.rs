@@ -26,16 +26,14 @@ impl AudioPlayer {
     }
 
     pub fn beep(&self) {
-        match self.device.status() {
-            AudioStatus::Paused => self.device.resume(),
-            _ => (),
+        if let AudioStatus::Paused = self.device.status() {
+            self.device.resume()
         }
     }
 
     pub fn stop_beep(&self) {
-        match self.device.status() {
-            AudioStatus::Playing => self.device.pause(),
-            _ => (),
+        if let AudioStatus::Playing = self.device.status() {
+            self.device.pause()
         }
     }
 }

@@ -30,7 +30,7 @@ pub enum OpCode {
 }
 
 #[derive(Debug)]
-pub struct CPU {
+pub struct Cpu {
     pc: u16,
     i: u16,
     memory: [u16; 4096],
@@ -61,9 +61,9 @@ const FONT: [u16; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
-impl Default for CPU {
+impl Default for Cpu {
     fn default() -> Self {
-        let mut cpu = CPU {
+        let mut cpu = Cpu {
             pc: 0x200,
             i: 0x0,
             memory: [0u16; 4096],
@@ -81,16 +81,17 @@ impl Default for CPU {
     }
 }
 
-impl CPU {
+impl Cpu {
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn load_program(&mut self, path: &Path) {
+    pub fn load(mut self, path: &Path) -> Cpu {
         let bytes = read(path).unwrap();
         bytes.iter().enumerate().for_each(|(i, &x)| {
             self.memory[0x200 + i] = x.into();
         });
+        self
     }
 
     pub fn fetch(&mut self) -> u16 {
@@ -138,7 +139,7 @@ impl CPU {
             }
             (0x6, x, _, _) => OpCode::SetRegister(x, nn),
             (0x7, x, _, _) => OpCode::AddToRegister(x, nn),
-            (0x8, x, y, 0x0) => OpCode::SetRegister(x, self.get_register(y).try_into().unwrap()),
+            (0x8, x, y, 0x0) => OpCode::SetRegister(x, self.get_register(y)),
             (0x8, x, y, 0x1) => OpCode::SetRegister(
                 x,
                 (usize::from(self.get_register(x)) | usize::from(self.get_register(y)))
@@ -207,7 +208,7 @@ impl CPU {
             OpCode::SkipIfKey(x, pressed) => {
                 let key = self.get_register(x);
                 if pressed == self.key_pressed(event_pump, key) {
-                    return self.skip();
+                    self.skip();
                 }
             }
             OpCode::GetKey(key) => self.set_waiting_key(Some(key)),
@@ -267,11 +268,10 @@ impl CPU {
     fn add(&mut self, x: usize, y: usize) {
         let vx = self.get_register(x);
         let vy = self.get_register(y);
-        match vx.checked_add(vy) {
-            None => self.set_carry(1),
-            _ => {}
+        if vx.checked_add(vy).is_none() {
+            self.set_carry(1)
         };
-        self.set_register(x, vx.wrapping_add(vy).try_into().unwrap());
+        self.set_register(x, vx.wrapping_add(vy));
     }
 
     fn subtract(&mut self, x: usize, y: usize) {
@@ -282,7 +282,7 @@ impl CPU {
         } else {
             self.set_carry(0)
         }
-        self.set_register(x, vx.wrapping_sub(vy).try_into().unwrap());
+        self.set_register(x, vx.wrapping_sub(vy));
     }
 
     fn shift_right(&mut self, x: usize) {
@@ -334,14 +334,14 @@ impl CPU {
         event_pump
             .keyboard_state()
             .pressed_scancodes()
-            .nth(0)
-            .map(|key| CPU::unmap(key))
+            .next()
+            .map(Cpu::unmap)
     }
 
     fn key_pressed(&self, event_pump: &EventPump, key: u8) -> bool {
         event_pump
             .keyboard_state()
-            .is_scancode_pressed(CPU::map(key))
+            .is_scancode_pressed(Cpu::map(key))
     }
 
     fn get_register(&mut self, register: usize) -> u8 {
@@ -363,7 +363,7 @@ impl CPU {
     fn read_current_instruction(&mut self) -> u16 {
         let part_one = self.memory[self.pc as usize];
         let part_two = self.memory[(self.pc + 1) as usize];
-        return (part_one << 8) | part_two as u16;
+        (part_one << 8) | part_two
     }
 
     fn clear_screen(&mut self) {
@@ -374,10 +374,10 @@ impl CPU {
         });
     }
 
-    fn update_screen(&mut self, x: usize, y: usize, n: u16) -> () {
+    fn update_screen(&mut self, x: usize, y: usize, n: u16) {
         let mut x_coord = self.get_register(x) % 64;
         let mut y_coord = self.get_register(y) % 32;
-        let _ = self.set_register(0xF, 0);
+        self.set_register(0xF, 0);
         for sprite_row in 0..n {
             let sprite_index = (self.get_index() + sprite_row) as usize;
 
@@ -393,7 +393,7 @@ impl CPU {
                 if sprite_pixel != 0 {
                     if *screen_pixel == 1 {
                         *screen_pixel = 0;
-                        let _ = self.set_register(0xF, 1);
+                        self.set_register(0xF, 1);
                     } else {
                         // Or if the current pixel in the sprite row is on and the screen pixel is not, draw the pixel at the X and Y coordinates
                         *screen_pixel = 1;

@@ -86,8 +86,8 @@ impl Cpu {
         Default::default()
     }
 
-    pub fn load(mut self, path: &Path) -> Cpu {
-        let bytes = read(path).unwrap();
+    pub fn load(mut self, path: String) -> Cpu {
+        let bytes = read(std::path::PathBuf::from(path)).unwrap();
         bytes.iter().enumerate().for_each(|(i, &x)| {
             self.memory[0x200 + i] = x.into();
         });

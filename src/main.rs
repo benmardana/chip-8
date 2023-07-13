@@ -3,27 +3,27 @@ mod cpu;
 mod renderer;
 extern crate sdl2;
 
+use anyhow::{Error, Result};
 use audio::AudioPlayer;
 use cpu::Cpu;
+use lexopt::Arg::{Long, Short, Value};
+use lexopt::{Parser, ValueExt};
 use renderer::Renderer;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::thread::sleep;
 use std::time::Duration;
 
-fn main() {
-    let path = std::env::args().nth(1).expect("no ch8 file provided");
-
-    let mut cpu = Cpu::new().load(&std::path::PathBuf::from(path));
+fn main() -> Result<()> {
+    let mut cpu = Cpu::new().load(parse_args()?.path);
 
     let sdl_context = sdl2::init().unwrap();
     let mut renderer = Renderer::new(&sdl_context).unwrap();
     let audio_player = AudioPlayer::new(&sdl_context).unwrap();
 
-    let mut cycle: usize = 0;
-
     let mut event_pump = renderer.event_pump();
 
+    let mut cycle: usize = 0;
     'running: loop {
         cycle += 1;
         for event in event_pump.poll_iter() {
@@ -61,6 +61,38 @@ fn main() {
         }
 
         // Sleep at a rate that emulates about 500Hz.
-        sleep(Duration::new(0, 2_000_000_u32))
+        sleep(Duration::new(0, 2_000_000u32))
     }
+    Ok(())
+}
+
+struct Args {
+    path: String,
+}
+
+fn parse_args() -> Result<Args> {
+    let mut path = None;
+    let mut parser = Parser::from_env();
+    while let Some(arg) = parser.next()? {
+        match arg {
+            Value(val) if path.is_none() => {
+                path = Some(val.string()?);
+            }
+            Long("help") => {
+                println!("Usage: chip-8 PATH");
+                std::process::exit(0);
+            }
+            Short('h') => {
+                println!("Usage: chip-8 PATH");
+                std::process::exit(0);
+            }
+            _ => return Err(arg.unexpected().into()),
+        }
+    }
+
+    Ok(Args {
+        path: path
+            .ok_or("missing argument PATH".to_string())
+            .map_err(Error::msg)?,
+    })
 }

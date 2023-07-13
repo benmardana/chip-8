@@ -5,14 +5,14 @@ extern crate sdl2;
 
 use anyhow::{Error, Result};
 use audio::AudioPlayer;
-use cpu::Cpu;
+use cpu::{Cpu, OpCode};
 use lexopt::Arg::{Long, Short, Value};
 use lexopt::{Parser, ValueExt};
 use renderer::Renderer;
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::keyboard::Scancode;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 fn main() -> Result<()> {
     let mut cpu = Cpu::new().load(parse_args()?.path);
@@ -25,15 +25,34 @@ fn main() -> Result<()> {
 
     let mut cycle: usize = 0;
     'running: loop {
+        let start = SystemTime::now();
+
         cycle += 1;
         for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'running,
-                _ => {}
+            if let Event::KeyDown {
+                scancode: Some(x), ..
+            } = event
+            {
+                match x {
+                    Scancode::Escape => break 'running,
+                    Scancode::X => 0x00,
+                    Scancode::Num1 => 0x01,
+                    Scancode::Num2 => 0x02,
+                    Scancode::Num3 => 0x03,
+                    Scancode::Q => 0x04,
+                    Scancode::W => 0x05,
+                    Scancode::E => 0x06,
+                    Scancode::A => 0x07,
+                    Scancode::S => 0x08,
+                    Scancode::D => 0x09,
+                    Scancode::Z => 0x0A,
+                    Scancode::C => 0x0B,
+                    Scancode::Num4 => 0x0C,
+                    Scancode::R => 0x0D,
+                    Scancode::F => 0x0E,
+                    Scancode::V => 0x0F,
+                    _ => 0x29,
+                };
             }
         }
 
@@ -45,12 +64,13 @@ fn main() -> Result<()> {
             let instruction = cpu.fetch();
             let opcode = cpu.decode(instruction);
             cpu.execute(opcode, &event_pump);
+            if matches!(opcode, OpCode::Draw(..)) {
+                renderer.draw_screen(cpu.screen);
+            }
         }
 
-        renderer.draw_screen(cpu.screen);
-
-        // Every 8th tick, decrement timers.
-        if cycle == 8 {
+        if cycle == 10 {
+            println!("{:#?}", SystemTime::now());
             cpu.drop_timers();
             if cpu.should_beep() {
                 audio_player.beep();
@@ -60,8 +80,7 @@ fn main() -> Result<()> {
             cycle = 0;
         }
 
-        // Sleep at a rate that emulates about 500Hz.
-        sleep(Duration::new(0, 2_000_000u32))
+        sleep(Duration::from_secs_f64(1.0 / 600.0).saturating_sub(start.elapsed().unwrap()));
     }
     Ok(())
 }

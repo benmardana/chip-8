@@ -1,6 +1,6 @@
 use rand::{thread_rng, Rng};
 use sdl2::{keyboard::Scancode, EventPump};
-use std::{fs::read, ops::Add, path::Path};
+use std::{fs::read, ops::Add};
 
 use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
 

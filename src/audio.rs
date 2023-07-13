@@ -1,3 +1,4 @@
+use anyhow::{Error, Result};
 use sdl2::{
     audio::{AudioCallback, AudioDevice, AudioSpecDesired, AudioStatus},
     Sdl,
@@ -8,20 +9,20 @@ pub struct AudioPlayer {
 }
 
 impl AudioPlayer {
-    pub fn new(sdl_context: &Sdl) -> Result<AudioPlayer, String> {
+    pub fn new(sdl_context: &Sdl) -> Result<AudioPlayer> {
         const AUDIO_SPEC_DESIRED: AudioSpecDesired = AudioSpecDesired {
             freq: Some(44100),
             channels: Some(1), // mono
             samples: None,     // default sample size
         };
-        let audio_subsystem = sdl_context.audio().unwrap();
+        let audio_subsystem = sdl_context.audio().map_err(Error::msg)?;
         let device = audio_subsystem
             .open_playback(None, &AUDIO_SPEC_DESIRED, |spec| SquareWave {
                 phase_inc: 220.0 / spec.freq as f32,
                 phase: 0.0,
                 volume: 0.25,
             })
-            .unwrap();
+            .map_err(Error::msg)?;
         Ok(AudioPlayer { device })
     }
 

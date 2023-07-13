@@ -1,3 +1,4 @@
+use anyhow::{Error, Result};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
@@ -7,15 +8,15 @@ pub const GRID_X_SIZE: u32 = 64;
 pub const GRID_Y_SIZE: u32 = 32;
 pub const DOT_SIZE_IN_PXS: u32 = 10;
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     canvas: WindowCanvas,
-    sdl_context: Sdl,
+    sdl_context: &'a Sdl,
     pub screen: [[u8; 64]; 32],
 }
 
-impl Renderer {
-    pub fn new(sdl_context: &Sdl) -> Result<Renderer, String> {
-        let video_subsystem = sdl_context.video().unwrap();
+impl Renderer<'_> {
+    pub fn new(sdl_context: &Sdl) -> Result<Renderer> {
+        let video_subsystem = sdl_context.video().map_err(Error::msg)?;
         let window = video_subsystem
             .window(
                 "chip-8",
@@ -26,10 +27,10 @@ impl Renderer {
             .opengl()
             .build()
             .expect("unable to create window");
-        let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+        let canvas = window.into_canvas().build()?;
         Ok(Renderer {
             canvas,
-            sdl_context: sdl_context.clone(),
+            sdl_context,
             screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         })
     }

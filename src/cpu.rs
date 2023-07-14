@@ -5,7 +5,7 @@ use std::{fs::read, ops::Add};
 use crate::renderer::{GRID_X_SIZE, GRID_Y_SIZE};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum OpCode {
+enum OpCode {
     ClearScreen,
     Jump(u16),
     SetRegister(usize, u8),
@@ -38,8 +38,9 @@ pub struct Cpu {
     registers: [u8; 16],
     delay_timer: u8,
     sound_timer: u8,
-    pub awaiting_key: Option<usize>,
+    awaiting_key: Option<usize>,
     pub screen: [[u8; 64]; 32],
+    screen_mutated: bool,
 }
 
 const FONT: [u16; 80] = [
@@ -73,6 +74,7 @@ impl Default for Cpu {
             sound_timer: 0u8,
             awaiting_key: None,
             screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
+            screen_mutated: false,
         };
         FONT.iter().enumerate().for_each(|(i, &x)| {
             cpu.memory[i] = x;
@@ -94,13 +96,39 @@ impl Cpu {
         self
     }
 
-    pub fn fetch(&mut self) -> u16 {
+    pub fn tick(&mut self, event_pump: &EventPump) {
+        if self.awaiting_key.is_none() {
+            let instruction = self.fetch();
+            let opcode = self.decode(instruction);
+            self.execute(opcode, event_pump);
+
+            match opcode {
+                OpCode::ClearScreen | OpCode::Draw(..) => self.screen_mutated = true,
+                _ => self.screen_mutated = false,
+            }
+        }
+    }
+
+    pub fn tick_timers(&mut self) {
+        self.delay_timer = self.delay_timer.saturating_sub(1);
+        self.sound_timer = self.sound_timer.saturating_sub(1);
+    }
+
+    pub fn should_beep(&self) -> bool {
+        self.sound_timer > 0
+    }
+
+    pub fn should_draw(&self) -> bool {
+        self.screen_mutated
+    }
+
+    fn fetch(&mut self) -> u16 {
         let instruction = self.read_current_instruction();
         self.skip();
         instruction
     }
 
-    pub fn decode(&mut self, instruction: u16) -> OpCode {
+    fn decode(&mut self, instruction: u16) -> OpCode {
         let kind = (instruction & 0xF000) >> 12;
         let x = ((instruction & 0x0F00) >> 8) as usize;
         let y = ((instruction & 0x00F0) >> 4) as usize;
@@ -187,7 +215,7 @@ impl Cpu {
         }
     }
 
-    pub fn execute(&mut self, opcode: OpCode, event_pump: &EventPump) {
+    fn execute(&mut self, opcode: OpCode, event_pump: &EventPump) {
         match opcode {
             OpCode::ClearScreen => self.clear_screen(),
             OpCode::Jump(n) => self.set_pc(n),
@@ -256,15 +284,6 @@ impl Cpu {
         self.sound_timer = val;
     }
 
-    pub fn drop_timers(&mut self) {
-        self.delay_timer = self.delay_timer.saturating_sub(1);
-        self.sound_timer = self.sound_timer.saturating_sub(1);
-    }
-
-    pub fn should_beep(&self) -> bool {
-        self.sound_timer > 0
-    }
-
     fn add(&mut self, x: usize, y: usize) {
         let vx = self.get_register(x);
         let vy = self.get_register(y);
@@ -330,25 +349,25 @@ impl Cpu {
         self.set_pc(address)
     }
 
-    pub fn some_key_pressed(&self, event_pump: &EventPump) -> Option<u8> {
+    fn _some_key_pressed(&self, event_pump: &EventPump) -> Option<u8> {
         event_pump
             .keyboard_state()
             .pressed_scancodes()
             .next()
-            .map(Cpu::unmap)
+            .map(|code| self._unmap(code))
     }
 
     fn key_pressed(&self, event_pump: &EventPump, key: u8) -> bool {
         event_pump
             .keyboard_state()
-            .is_scancode_pressed(Cpu::map(key))
+            .is_scancode_pressed(self.map(key))
     }
 
     fn get_register(&mut self, register: usize) -> u8 {
         self.registers[register]
     }
 
-    pub fn set_register(&mut self, register: usize, value: u8) {
+    fn set_register(&mut self, register: usize, value: u8) {
         self.registers[register] = value;
     }
 
@@ -418,7 +437,7 @@ impl Cpu {
         }
     }
 
-    fn map(code: u8) -> Scancode {
+    fn map(&self, code: u8) -> Scancode {
         match code {
             0x00 => Scancode::X,
             0x01 => Scancode::Num1,
@@ -440,7 +459,7 @@ impl Cpu {
         }
     }
 
-    fn unmap(code: Scancode) -> u8 {
+    fn _unmap(&self, code: Scancode) -> u8 {
         match code {
             Scancode::X => 0x00,
             Scancode::Num1 => 0x01,

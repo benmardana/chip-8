@@ -1,18 +1,20 @@
+mod args;
 mod audio;
 mod cpu;
 mod renderer;
 extern crate sdl2;
 
 use anyhow::{Error, Result};
+use args::parse_args;
 use audio::AudioPlayer;
-use cpu::{Cpu, OpCode};
-use lexopt::Arg::{Long, Short, Value};
-use lexopt::{Parser, ValueExt};
+use cpu::Cpu;
 use renderer::Renderer;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
+
+const HZ: f64 = 2000.0;
 
 fn main() -> Result<()> {
     let mut cpu = Cpu::new().load(parse_args()?.path);
@@ -23,11 +25,11 @@ fn main() -> Result<()> {
 
     let mut event_pump = renderer.event_pump();
 
-    let mut cycle: usize = 0;
+    let mut cycle: f64 = 0.0;
     'running: loop {
         let start = SystemTime::now();
+        cycle += 1.0;
 
-        cycle += 1;
         for event in event_pump.poll_iter() {
             if let Event::KeyDown {
                 scancode: Some(x), ..
@@ -56,62 +58,26 @@ fn main() -> Result<()> {
             }
         }
 
-        if let Some(x) = cpu.awaiting_key {
-            if let Some(key) = cpu.some_key_pressed(&event_pump) {
-                cpu.set_register(x, key);
-            }
+        cpu.tick(&event_pump);
+
+        if cycle >= HZ / 60.0 {
+            cpu.tick_timers();
+            cycle = 0.0;
+        }
+
+        // handle output
+        if cpu.should_draw() {
+            renderer.draw_screen(cpu.screen);
+        }
+
+        if cpu.should_beep() {
+            audio_player.beep();
         } else {
-            let instruction = cpu.fetch();
-            let opcode = cpu.decode(instruction);
-            cpu.execute(opcode, &event_pump);
-            if matches!(opcode, OpCode::Draw(..)) {
-                renderer.draw_screen(cpu.screen);
-            }
+            audio_player.stop_beep();
         }
 
-        if cycle == 10 {
-            println!("{:#?}", SystemTime::now());
-            cpu.drop_timers();
-            if cpu.should_beep() {
-                audio_player.beep();
-            } else {
-                audio_player.stop_beep();
-            }
-            cycle = 0;
-        }
-
-        sleep(Duration::from_secs_f64(1.0 / 600.0).saturating_sub(start.elapsed()?));
+        println!("{:#?}", start.elapsed());
+        sleep(Duration::from_secs_f64(1.0 / HZ).saturating_sub(start.elapsed()?));
     }
     Ok(())
-}
-
-struct Args {
-    path: String,
-}
-
-fn parse_args() -> Result<Args> {
-    let mut path = None;
-    let mut parser = Parser::from_env();
-    while let Some(arg) = parser.next()? {
-        match arg {
-            Value(val) if path.is_none() => {
-                path = Some(val.string()?);
-            }
-            Long("help") => {
-                println!("Usage: chip-8 PATH");
-                std::process::exit(0);
-            }
-            Short('h') => {
-                println!("Usage: chip-8 PATH");
-                std::process::exit(0);
-            }
-            _ => return Err(arg.unexpected().into()),
-        }
-    }
-
-    Ok(Args {
-        path: path
-            .ok_or("missing argument PATH".to_string())
-            .map_err(Error::msg)?,
-    })
 }

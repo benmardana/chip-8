@@ -38,9 +38,10 @@ pub struct Cpu {
     registers: [u8; 16],
     delay_timer: u8,
     sound_timer: u8,
-    awaiting_key: Option<usize>,
-    pub screen: [[u8; 64]; 32],
+    awaiting_key_register: Option<usize>,
+    key_down: Option<u8>,
     screen_mutated: bool,
+    pub screen: [[u8; 64]; 32],
 }
 
 const FONT: [u16; 80] = [
@@ -72,9 +73,10 @@ impl Default for Cpu {
             registers: [0u8; 16],
             delay_timer: 0u8,
             sound_timer: 0u8,
-            awaiting_key: None,
-            screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
+            awaiting_key_register: None,
+            key_down: None,
             screen_mutated: false,
+            screen: [[0; GRID_X_SIZE as usize]; GRID_Y_SIZE as usize],
         };
         FONT.iter().enumerate().for_each(|(i, &x)| {
             cpu.memory[i] = x;
@@ -97,7 +99,23 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, event_pump: &EventPump) {
-        if self.awaiting_key.is_none() {
+        if let Some(register) = self.awaiting_key_register {
+            let keyboard_state = event_pump.keyboard_state();
+            if let Some(key) = keyboard_state.pressed_scancodes().next() {
+                self.key_down = Some(self.unmap(key));
+                return;
+            }
+            if let Some(key_down) = self.key_down {
+                if !keyboard_state
+                    .pressed_scancodes()
+                    .any(|scancode| scancode == self.map(key_down))
+                {
+                    self.set_register(register, key_down);
+                    self.awaiting_key_register = None;
+                    self.key_down = None;
+                }
+            }
+        } else {
             let instruction = self.fetch();
             let opcode = self.decode(instruction);
             self.execute(opcode, event_pump);
@@ -205,10 +223,8 @@ impl Cpu {
             }
             (0xF, x, 0x0, 0xA) => OpCode::GetKey(x),
             (0xF, x, 0x2, 0x9) => OpCode::SetIndex(self.get_register(x).into()),
-
             (0xF, x, 0x3, 0x3) => OpCode::BinaryConversion(x),
             (0xF, x, 0x5, 0x5) => OpCode::StoreMemory(x),
-
             (0xF, x, 0x6, 0x5) => OpCode::LoadMemory(x),
             (0x0, _, _, _) => OpCode::NoOp,
             _ => OpCode::NoOp,
@@ -226,6 +242,10 @@ impl Cpu {
             OpCode::CallSubroutine(n) => self.call_subroutine(n),
             OpCode::ReturnFromSubroutine => self.return_from_subroutine(),
             OpCode::Skip => self.skip(),
+            OpCode::SkipIfKey(x, pressed) => {
+                let key = self.get_register(x);
+                self.skip_if_key(key, pressed, event_pump);
+            }
             OpCode::NoOp => (),
             OpCode::Add(x, y) => self.add(x, y),
             OpCode::Subtract(x, y) => self.subtract(x, y),
@@ -233,17 +253,21 @@ impl Cpu {
             OpCode::ShiftLeft(x) => self.shift_left(x),
             OpCode::SetDelayTimer(x) => self.set_delay_timer(x),
             OpCode::SetSoundTimer(x) => self.set_sound_timer(x),
-            OpCode::SkipIfKey(x, pressed) => {
-                let key = self.get_register(x);
-                if pressed == self.key_pressed(event_pump, key) {
-                    self.skip();
-                }
-            }
             OpCode::GetKey(key) => self.set_waiting_key(Some(key)),
             OpCode::BinaryConversion(x) => self.binary_conversion(x),
             OpCode::StoreMemory(x) => self.store_memory(x),
             OpCode::LoadMemory(x) => self.load_memory(x),
         };
+    }
+
+    fn skip_if_key(&mut self, key: u8, pressed: bool, event_pump: &EventPump) -> bool {
+        let key_pressed = event_pump
+            .keyboard_state()
+            .is_scancode_pressed(self.map(key));
+        if pressed == key_pressed {
+            self.skip();
+        }
+        pressed == key_pressed
     }
 
     fn store_memory(&mut self, register: usize) {
@@ -272,8 +296,8 @@ impl Cpu {
         self.memory[usize::from(index + 2)] = ones.into();
     }
 
-    fn set_waiting_key(&mut self, key: Option<usize>) {
-        self.awaiting_key = key
+    fn set_waiting_key(&mut self, register: Option<usize>) {
+        self.awaiting_key_register = register
     }
 
     fn set_delay_timer(&mut self, val: u8) {
@@ -347,20 +371,6 @@ impl Cpu {
         let current_pc = self.pc;
         self.stack.push(current_pc);
         self.set_pc(address)
-    }
-
-    fn _some_key_pressed(&self, event_pump: &EventPump) -> Option<u8> {
-        event_pump
-            .keyboard_state()
-            .pressed_scancodes()
-            .next()
-            .map(|code| self._unmap(code))
-    }
-
-    fn key_pressed(&self, event_pump: &EventPump, key: u8) -> bool {
-        event_pump
-            .keyboard_state()
-            .is_scancode_pressed(self.map(key))
     }
 
     fn get_register(&mut self, register: usize) -> u8 {
@@ -459,7 +469,7 @@ impl Cpu {
         }
     }
 
-    fn _unmap(&self, code: Scancode) -> u8 {
+    fn unmap(&self, code: Scancode) -> u8 {
         match code {
             Scancode::X => 0x00,
             Scancode::Num1 => 0x01,

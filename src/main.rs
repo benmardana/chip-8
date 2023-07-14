@@ -40,39 +40,20 @@ fn main() -> Result<()> {
 
     'running: loop {
         let start = SystemTime::now();
-
         for event in event_pump.poll_iter() {
             if let Event::KeyDown {
-                scancode: Some(x), ..
+                scancode: Some(Scancode::Escape),
+                ..
             } = event
             {
-                match x {
-                    Scancode::Escape => break 'running,
-                    Scancode::X => 0x00,
-                    Scancode::Num1 => 0x01,
-                    Scancode::Num2 => 0x02,
-                    Scancode::Num3 => 0x03,
-                    Scancode::Q => 0x04,
-                    Scancode::W => 0x05,
-                    Scancode::E => 0x06,
-                    Scancode::A => 0x07,
-                    Scancode::S => 0x08,
-                    Scancode::D => 0x09,
-                    Scancode::Z => 0x0A,
-                    Scancode::C => 0x0B,
-                    Scancode::Num4 => 0x0C,
-                    Scancode::R => 0x0D,
-                    Scancode::F => 0x0E,
-                    Scancode::V => 0x0F,
-                    _ => 0x29,
-                };
+                break 'running;
             }
         }
+
         let mut guard = cpu_lock.lock().unwrap();
 
         guard.tick(&event_pump);
 
-        // handle output
         if guard.should_draw() {
             renderer.draw_screen(guard.screen);
         }

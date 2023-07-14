@@ -17,7 +17,7 @@ enum OpCode {
     Skip,
     SkipIfKey(usize, bool),
     Add(usize, usize),
-    Subtract(usize, usize),
+    Subtract(usize, usize, usize),
     ShiftRight(usize),
     ShiftLeft(usize),
     SetDelayTimer(u8),
@@ -205,9 +205,9 @@ impl Cpu {
                     .unwrap(),
             ),
             (0x8, x, y, 0x4) => OpCode::Add(x, y),
-            (0x8, x, y, 0x5) => OpCode::Subtract(x, y),
+            (0x8, x, y, 0x5) => OpCode::Subtract(x, y, x),
             (0x8, x, _, 0x6) => OpCode::ShiftRight(x),
-            (0x8, x, y, 0x7) => OpCode::Subtract(y, x),
+            (0x8, x, y, 0x7) => OpCode::Subtract(y, x, x),
             (0x8, x, _, 0xE) => OpCode::ShiftLeft(x),
             (0xA, _, _, _) => OpCode::SetIndex(nnn),
             (0xB, _, _, _) => OpCode::Jump(nnn.add(u16::from(self.get_register(0)))),
@@ -248,7 +248,7 @@ impl Cpu {
             }
             OpCode::NoOp => (),
             OpCode::Add(x, y) => self.add(x, y),
-            OpCode::Subtract(x, y) => self.subtract(x, y),
+            OpCode::Subtract(x, y, n) => self.subtract(x, y, n),
             OpCode::ShiftRight(x) => self.shift_right(x),
             OpCode::ShiftLeft(x) => self.shift_left(x),
             OpCode::SetDelayTimer(x) => self.set_delay_timer(x),
@@ -317,7 +317,7 @@ impl Cpu {
         self.set_register(x, vx.wrapping_add(vy));
     }
 
-    fn subtract(&mut self, x: usize, y: usize) {
+    fn subtract(&mut self, x: usize, y: usize, destination: usize) {
         let vx = self.get_register(x);
         let vy = self.get_register(y);
         if vx > vy {
@@ -325,7 +325,7 @@ impl Cpu {
         } else {
             self.set_carry(0)
         }
-        self.set_register(x, vx.wrapping_sub(vy));
+        self.set_register(destination, vx.wrapping_sub(vy));
     }
 
     fn shift_right(&mut self, x: usize) {

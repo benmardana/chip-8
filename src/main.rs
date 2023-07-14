@@ -17,9 +17,9 @@ use std::time::{Duration, SystemTime};
 fn main() -> Result<()> {
     let mut cpu = Cpu::new().load(parse_args()?.path);
 
-    let sdl_context = sdl2::init().unwrap();
-    let mut renderer = Renderer::new(&sdl_context).unwrap();
-    let audio_player = AudioPlayer::new(&sdl_context).unwrap();
+    let sdl_context = sdl2::init().map_err(Error::msg)?;
+    let mut renderer = Renderer::new(&sdl_context).map_err(Error::msg)?;
+    let audio_player = AudioPlayer::new(&sdl_context).map_err(Error::msg)?;
 
     let mut event_pump = renderer.event_pump();
 
@@ -80,7 +80,7 @@ fn main() -> Result<()> {
             cycle = 0;
         }
 
-        sleep(Duration::from_secs_f64(1.0 / 600.0).saturating_sub(start.elapsed().unwrap()));
+        sleep(Duration::from_secs_f64(1.0 / 600.0).saturating_sub(start.elapsed()?));
     }
     Ok(())
 }

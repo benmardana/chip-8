@@ -28,6 +28,7 @@ fn main() -> Result<()> {
 
     let mut event_pump = renderer.event_pump();
 
+    // Run timers in a 60hz cycle
     thread::spawn(move || -> Result<()> {
         loop {
             let start = SystemTime::now();

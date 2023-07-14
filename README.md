@@ -6,6 +6,12 @@ My primary resource was this high level guide: https://tobiasvl.github.io/blog/w
 
 I used the test roms from this repository to get up and running and then later on to iron out quirks: https://github.com/Timendus/chip8-test-suite/tree/main
 
+## Requirements
+
+### SDL 2
+
+Install via your favourite package manager, or the website: https://www.libsdl.org/
+
 ## Usage
 
 ```bash

@@ -11,13 +11,16 @@ use cpu::Cpu;
 use renderer::Renderer;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
-use std::thread::sleep;
+use std::sync::{Arc, Mutex};
+use std::thread::{self, sleep};
 use std::time::{Duration, SystemTime};
 
-const HZ: f64 = 2000.0;
+const HZ: f64 = 3000.0;
 
 fn main() -> Result<()> {
-    let mut cpu = Cpu::new().load(parse_args()?.path);
+    let cpu = Mutex::new(Cpu::new().load(parse_args()?.path));
+    let timer_arc = Arc::new(cpu);
+    let cpu_lock = Arc::clone(&timer_arc);
 
     let sdl_context = sdl2::init().map_err(Error::msg)?;
     let mut renderer = Renderer::new(&sdl_context).map_err(Error::msg)?;
@@ -25,10 +28,18 @@ fn main() -> Result<()> {
 
     let mut event_pump = renderer.event_pump();
 
-    let mut cycle: f64 = 0.0;
+    thread::spawn(move || -> Result<()> {
+        loop {
+            let start = SystemTime::now();
+            let mut guard = timer_arc.lock().unwrap();
+            guard.tick_timers();
+            drop(guard);
+            sleep(Duration::from_secs_f64(1.0 / 60.0).saturating_sub(start.elapsed()?));
+        }
+    });
+
     'running: loop {
         let start = SystemTime::now();
-        cycle += 1.0;
 
         for event in event_pump.poll_iter() {
             if let Event::KeyDown {
@@ -57,26 +68,22 @@ fn main() -> Result<()> {
                 };
             }
         }
+        let mut guard = cpu_lock.lock().unwrap();
 
-        cpu.tick(&event_pump);
-
-        if cycle >= HZ / 60.0 {
-            cpu.tick_timers();
-            cycle = 0.0;
-        }
+        guard.tick(&event_pump);
 
         // handle output
-        if cpu.should_draw() {
-            renderer.draw_screen(cpu.screen);
+        if guard.should_draw() {
+            renderer.draw_screen(guard.screen);
         }
 
-        if cpu.should_beep() {
+        if guard.should_beep() {
             audio_player.beep();
         } else {
             audio_player.stop_beep();
         }
 
-        println!("{:#?}", start.elapsed());
+        drop(guard);
         sleep(Duration::from_secs_f64(1.0 / HZ).saturating_sub(start.elapsed()?));
     }
     Ok(())

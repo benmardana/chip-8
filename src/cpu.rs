@@ -311,39 +311,41 @@ impl Cpu {
     fn add(&mut self, x: usize, y: usize) {
         let vx = self.get_register(x);
         let vy = self.get_register(y);
-        if vx.checked_add(vy).is_none() {
-            self.set_carry(1)
-        };
         self.set_register(x, vx.wrapping_add(vy));
+        if vx.checked_add(vy).is_none() {
+            self.set_carry(1);
+        } else {
+            self.set_carry(0);
+        }
     }
 
     fn subtract(&mut self, x: usize, y: usize, destination: usize) {
         let vx = self.get_register(x);
         let vy = self.get_register(y);
-        if vx > vy {
-            self.set_carry(1)
-        } else {
-            self.set_carry(0)
-        }
         self.set_register(destination, vx.wrapping_sub(vy));
+        if vx > vy {
+            self.set_carry(1);
+        } else {
+            self.set_carry(0);
+        }
     }
 
     fn shift_right(&mut self, x: usize) {
-        // Set VF to 1 if the bit that was shifted out was 1, or 0 if it was 0
-        let shifted_bit = (x & 0b0001) >> 3;
-        self.set_carry(shifted_bit.try_into().unwrap());
         // Shift the value of VX one bit to the right
         let vx = self.get_register(x);
         self.set_register(x, vx >> 1);
+
+        // Set VF to 1 if the bit that was shifted out was 1, or 0 if it was 0
+        self.set_carry(vx & 0b0001);
     }
 
     fn shift_left(&mut self, x: usize) {
-        // Set VF to 1 if the bit that was shifted out was 1, or 0 if it was 0
-        let shifted_bit = (x & 0b1000) >> 3;
-        self.set_carry(shifted_bit.try_into().unwrap());
         // Shift the value of VX one bit to the left
         let vx = self.get_register(x);
         self.set_register(x, vx << 1);
+
+        // Set VF to 1 if the bit that was shifted out was 1, or 0 if it was 0
+        self.set_carry((vx & 0b1000) >> 3);
     }
 
     fn skip(&mut self) {
@@ -383,6 +385,10 @@ impl Cpu {
 
     fn set_carry(&mut self, value: u8) {
         self.registers[0xF] = value;
+    }
+
+    fn _get_carry(&self) -> u8 {
+        self.registers[0xF]
     }
 
     fn add_to_register(&mut self, register: usize, value: u8) {

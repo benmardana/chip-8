@@ -412,7 +412,7 @@ impl Cpu {
     fn update_screen(&mut self, x: usize, y: usize, n: u16) {
         let mut x_coord = self.get_register(x) % 64;
         let mut y_coord = self.get_register(y) % 32;
-        self.set_register(0xF, 0);
+        self.set_carry(0);
         for sprite_row in 0..n {
             let sprite_index = (self.get_index() + sprite_row) as usize;
 
@@ -428,7 +428,7 @@ impl Cpu {
                 if sprite_pixel != 0 {
                     if *screen_pixel == 1 {
                         *screen_pixel = 0;
-                        self.set_register(0xF, 1);
+                        self.set_carry(1);
                     } else {
                         // Or if the current pixel in the sprite row is on and the screen pixel is not, draw the pixel at the X and Y coordinates
                         *screen_pixel = 1;

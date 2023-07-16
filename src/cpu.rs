@@ -27,6 +27,7 @@ enum OpCode {
     StoreMemory(usize),
     LoadMemory(usize),
     NoOp,
+    Unknown,
 }
 
 #[derive(Debug)]
@@ -118,6 +119,11 @@ impl Cpu {
         } else {
             let instruction = self.fetch();
             let opcode = self.decode(instruction);
+            match opcode {
+                OpCode::NoOp => (),
+                OpCode::Unknown => (),
+                _ => self.skip(),
+            }
             self.execute(opcode, event_pump);
 
             match opcode {
@@ -141,9 +147,7 @@ impl Cpu {
     }
 
     fn fetch(&mut self) -> u16 {
-        let instruction = self.read_current_instruction();
-        self.skip();
-        instruction
+        self.read_current_instruction()
     }
 
     fn decode(&mut self, instruction: u16) -> OpCode {
@@ -227,7 +231,7 @@ impl Cpu {
             (0xF, x, 0x5, 0x5) => OpCode::StoreMemory(x),
             (0xF, x, 0x6, 0x5) => OpCode::LoadMemory(x),
             (0x0, _, _, _) => OpCode::NoOp,
-            _ => OpCode::NoOp,
+            _ => OpCode::Unknown,
         }
     }
 
@@ -246,7 +250,6 @@ impl Cpu {
                 let key = self.get_register(x);
                 self.skip_if_key(key, pressed, event_pump);
             }
-            OpCode::NoOp => (),
             OpCode::Add(x, y) => self.add(x, y),
             OpCode::Subtract(x, y, n) => self.subtract(x, y, n),
             OpCode::ShiftRight(x) => self.shift_right(x),
@@ -257,6 +260,8 @@ impl Cpu {
             OpCode::BinaryConversion(x) => self.binary_conversion(x),
             OpCode::StoreMemory(x) => self.store_memory(x),
             OpCode::LoadMemory(x) => self.load_memory(x),
+            OpCode::NoOp => (),
+            OpCode::Unknown => (),
         };
     }
 
@@ -385,10 +390,6 @@ impl Cpu {
 
     fn set_carry(&mut self, value: u8) {
         self.registers[0xF] = value;
-    }
-
-    fn _get_carry(&self) -> u8 {
-        self.registers[0xF]
     }
 
     fn add_to_register(&mut self, register: usize, value: u8) {

@@ -119,11 +119,6 @@ impl Cpu {
         } else {
             let instruction = self.fetch();
             let opcode = self.decode(instruction);
-            match opcode {
-                OpCode::NoOp => (),
-                OpCode::Unknown => (),
-                _ => self.skip(),
-            }
             self.execute(opcode, event_pump);
 
             match opcode {
@@ -147,7 +142,9 @@ impl Cpu {
     }
 
     fn fetch(&mut self) -> u16 {
-        self.read_current_instruction()
+        let instruction = self.read_current_instruction();
+        self.skip();
+        instruction
     }
 
     fn decode(&mut self, instruction: u16) -> OpCode {

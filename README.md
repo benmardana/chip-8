@@ -15,7 +15,8 @@ Install via your favourite package manager, or the website: https://www.libsdl.o
 ## Usage
 
 ```bash
-cargo run <path_to_rom>
+
+cargo run PATH [--hertz=NUM]
 ```
 
 A selection of useful roms are included in the [/roms](/roms/) folder.

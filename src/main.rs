@@ -18,7 +18,9 @@ use std::time::{Duration, SystemTime};
 const HZ: f64 = 3000.0;
 
 fn main() -> Result<()> {
-    let cpu = Mutex::new(Cpu::new().load(parse_args()?.path));
+    let args = parse_args()?;
+    let hertz = args.hertz.unwrap_or(HZ);
+    let cpu = Mutex::new(Cpu::new().load(args.path));
     let timer_arc = Arc::new(cpu);
     let cpu_lock = Arc::clone(&timer_arc);
 
@@ -66,7 +68,7 @@ fn main() -> Result<()> {
         }
 
         drop(guard);
-        sleep(Duration::from_secs_f64(1.0 / HZ).saturating_sub(start.elapsed()?));
+        sleep(Duration::from_secs_f64(1.0 / hertz).saturating_sub(start.elapsed()?));
     }
     Ok(())
 }
